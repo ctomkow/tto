@@ -10,7 +10,7 @@ import "fmt"
 
 type config struct {
 	System struct {
-		Role string   `json:"role"`
+		Role      string `json:"role"`
 		Replicate struct {
 			Mysql string `json:"mysql"`
 		}
@@ -38,8 +38,6 @@ func main() {
 	// parse config file input
 	config, _ := loadConfig(*configFile)
 
-
-
 	fmt.Println(config.System.Replicate.Mysql)
 }
 
@@ -65,4 +63,4 @@ func loadConfig(filename string) (config, error) {
 	return configStruct, err
 }
 
-func dumpDatabase(dbIP string, dbPort string, )
+//func dumpDatabase(dbIP string, dbPort string, )
