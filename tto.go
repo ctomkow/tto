@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 	"time"
-	_ "github.com/ctomkow/tto/database"
+	"tto/database"
 )
 
 type config struct {
@@ -45,17 +45,17 @@ func main() {
 	config, _ := loadConfig(*configFile)
 
 	// database connection
-	db := database.connectToDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+	db := database.ConnectToDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 
 	// dump DB, return dump file name
-	mysqlDump := database.dumpDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+	mysqlDump := database.DumpDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 
 	// TODO: send dump to remote receiver
 
 	// TODO: if remote receiver, get dump to restore
 
 	// restore DB
-	database.restoreDatabase(db, mysqlDump)
+	database.RestoreDatabase(db, mysqlDump)
 }
 
 // parse -conf flag and return as pointer

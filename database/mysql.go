@@ -13,7 +13,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func connectToDatabase (dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (db *sql.DB) {
+func ConnectToDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (db *sql.DB) {
 
 	// prep DB connection
 	db, err := sql.Open("mysql", dbUser + ":" + dbPass + "@tcp(" + dbIp + ":" + dbPort + ")/" + dbName)
@@ -31,7 +31,7 @@ func connectToDatabase (dbPort string, dbIp string, dbUser string, dbPass string
 }
 
 
-func dropDatabase (db *sql.DB, dbName string) {
+func DropDatabase(db *sql.DB, dbName string) {
 
 	_, err := db.Exec("DROP DATABASE " + dbName + ";")
 	if err != nil {
@@ -39,7 +39,7 @@ func dropDatabase (db *sql.DB, dbName string) {
 	}
 }
 
-func createDatabase (db *sql.DB, dbName string) {
+func CreateDatabase(db *sql.DB, dbName string) {
 
 	_, err := db.Exec("CREATE DATABASE " + dbName + ";")
 	if err != nil {
@@ -48,7 +48,7 @@ func createDatabase (db *sql.DB, dbName string) {
 
 }
 
-func dumpDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) string {
+func DumpDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) string {
 
 	// YYYYMMDDhhmmss
 	currentTime := time.Now().Format("20060102150405")
@@ -83,7 +83,7 @@ func dumpDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbNa
 	return sqlFile
 }
 
-func restoreDatabase(db *sql.DB, dump string) {
+func RestoreDatabase(db *sql.DB, dump string) {
 
 	// read .sql statement by statement and fire off to database server
 	// NOTE: bufio.NewScanner has a line length limit of 65536 chars. mysqldump does only one INSERT per table. Not good!
