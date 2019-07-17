@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"bufio"
@@ -85,7 +85,7 @@ func dumpDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbNa
 
 func restoreDatabase(db *sql.DB, dump string) {
 
-	// read .sql statement by statement and fire off to db server
+	// read .sql statement by statement and fire off to database server
 	// NOTE: bufio.NewScanner has a line length limit of 65536 chars. mysqldump does only one INSERT per table. Not good!
 	//       Using ReadString with a ';' delimiter, ensuring that the next character after is '\n'
 	fd, err := os.Open(dump)

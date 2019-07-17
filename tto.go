@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"time"
+	_ "github.com/ctomkow/tto/database"
 )
-import "fmt"
 
 type config struct {
 	System struct {
@@ -43,18 +44,18 @@ func main() {
 	// parse config file input
 	config, _ := loadConfig(*configFile)
 
-	// db connection
-	db := connectToDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+	// database connection
+	db := database.connectToDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 
 	// dump DB, return dump file name
-	mysqlDump := dumpDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+	mysqlDump := database.dumpDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 
 	// TODO: send dump to remote receiver
 
 	// TODO: if remote receiver, get dump to restore
 
 	// restore DB
-	restoreDatabase(db, mysqlDump)
+	database.restoreDatabase(db, mysqlDump)
 }
 
 // parse -conf flag and return as pointer
