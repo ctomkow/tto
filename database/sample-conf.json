@@ -1,0 +1,16 @@
+{
+    "system": {
+        "role": "sender",
+        "replicate": {
+            "mysql": "true",
+            "interval": "7200"
+        }
+    },
+    "mysql": {
+        "db_port": "3306",
+        "db_ip": "172.20.0.2",
+        "db_user": "db_user",
+        "db_pass": "db_pass",
+        "db_name": "db_name"
+    }
+}
