@@ -1,14 +1,19 @@
 {
     "system": {
         "role": "sender",
+        "dest": "x.x.x.x",
+        "port": "22",
+        "user": "user",
+        "pass": "pass",
         "replicate": {
             "mysql": "true",
-            "interval": "7200"
+            "interval": "7200",
+            "backup_dir": "/opt/tto/var/"
         }
     },
     "mysql": {
+        "db_ip": "y.y.y.y",
         "db_port": "3306",
-        "db_ip": "172.20.0.2",
         "db_user": "db_user",
         "db_pass": "db_pass",
         "db_name": "db_name"

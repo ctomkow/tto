@@ -3,17 +3,17 @@ package database
 import (
 	"bufio"
 	"database/sql"
-	"strings"
+	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
-	_ "github.com/go-sql-driver/mysql"
 )
 
-func ConnectToDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (db *sql.DB) {
+func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (db *sql.DB) {
 
 	// prep DB connection
 	db, err := sql.Open("mysql", dbUser + ":" + dbPass + "@tcp(" + dbIp + ":" + dbPort + ")/" + dbName)
@@ -31,7 +31,7 @@ func ConnectToDatabase(dbPort string, dbIp string, dbUser string, dbPass string,
 }
 
 
-func DropDatabase(db *sql.DB, dbName string) {
+func Drop(db *sql.DB, dbName string) {
 
 	_, err := db.Exec("DROP DATABASE " + dbName + ";")
 	if err != nil {
@@ -39,7 +39,7 @@ func DropDatabase(db *sql.DB, dbName string) {
 	}
 }
 
-func CreateDatabase(db *sql.DB, dbName string) {
+func Create(db *sql.DB, dbName string) {
 
 	_, err := db.Exec("CREATE DATABASE " + dbName + ";")
 	if err != nil {
@@ -48,7 +48,7 @@ func CreateDatabase(db *sql.DB, dbName string) {
 
 }
 
-func DumpDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) string {
+func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) string {
 
 	// YYYYMMDDhhmmss
 	currentTime := time.Now().Format("20060102150405")
@@ -83,7 +83,7 @@ func DumpDatabase(dbPort string, dbIp string, dbUser string, dbPass string, dbNa
 	return sqlFile
 }
 
-func RestoreDatabase(db *sql.DB, dump string) {
+func Restore(db *sql.DB, dump string) {
 
 	// read .sql statement by statement and fire off to database server
 	// NOTE: bufio.NewScanner has a line length limit of 65536 chars. mysqldump does only one INSERT per table. Not good!
@@ -110,16 +110,15 @@ func RestoreDatabase(db *sql.DB, dump string) {
 		buffer.WriteString(statement)
 
 		// look at next byte
-		oracleByte, err := reader.Peek(1)
+		oracleBytes, err := reader.Peek(1)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		//fmt.Print(buffer.String())
-		//fmt.Printf("%q", oracleByte)
+		//fmt.Printf("%q", oracleBytes)
 
-		// if next byte is '\n', then sql statement looks complete
-		if oracleByte[0] == 10 {
+		if oracleBytes[0] == 10 { // newline '\n' aka utf decimal '10'
 			_, err = db.Exec(buffer.String())
 			if err != nil {
 				log.Fatal(err)

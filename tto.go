@@ -6,21 +6,27 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
+	"strings"
 	"tto/database"
+	"tto/filetransfer"
 )
 
 type config struct {
 	System struct {
 		Role      string `json:"role"`
+		Dest      string `json:"dest"`
+		Port      string `json:"port"`
+		User      string `json:"user"`
+		Pass      string `json:"pass"`
 		Replicate struct {
-			Mysql    string `json:"mysql"`
-			Interval string `json:"interval"`
+			Mysql     string `json:"mysql"`
+			Interval  string `json:"interval"`
+			BackupDir string `json:"backup_dir"`
 		}
 	}
 	Mysql struct {
-		DBport string `json:"db_port"`
 		DBip   string `json:"db_ip"`
+		DBport string `json:"db_port"`
 		DBuser string `json:"db_user"`
 		DBpass string `json:"db_pass"`
 		DBname string `json:"db_name"`
@@ -29,33 +35,33 @@ type config struct {
 
 func init() {
 
-	fmt.Println("### ", "three-two-one sync and backup!")
-	fmt.Println("### ", "version 0.01")
-	fmt.Println("###")
+	fmt.Println("### ", "three-two-one go! v0.01")
 }
 
 func main() {
 
-	// parse cli flag input
+	// parse cli flags and config file
 	configFile := cliFlags()
+	config, _  := loadConfig(*configFile)
 
-	fmt.Println(time.Now().Format(time.RFC850))
+	if strings.Compare(config.System.Role, "sender") == 0 {
+		// TODO: daemon that watches the clock based on config.System.Replicate.Interval
 
-	// parse config file input
-	config, _ := loadConfig(*configFile)
+		// dump DB
+		mysqlDump := database.Dump(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 
-	// database connection
-	db := database.ConnectToDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+		// open connection to remote server and copy dump over
+		transferConnection := filetransfer.Open(config.System.Dest, config.System.Port, config.System.User, config.System.Pass)
+		filetransfer.Send(transferConnection, mysqlDump, config.System.Replicate.BackupDir)
 
-	// dump DB, return dump file name
-	mysqlDump := database.DumpDatabase(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+		// delete local dump
+		filetransfer.Cleanup(mysqlDump)
 
-	// TODO: send dump to remote receiver
-
-	// TODO: if remote receiver, get dump to restore
-
-	// restore DB
-	database.RestoreDatabase(db, mysqlDump)
+	} else if strings.Compare(config.System.Role, "receiver") == 0 {
+		// TODO: daemon that monitors folder for new dumps to restore (should write to a file the name of the last dump that was restored!)
+		//db := database.Open(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+		//database.Restore(db, mysqlDump)
+	}
 }
 
 // parse -conf flag and return as pointer
