@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 	"tto/database"
-	"tto/filetransfer"
+	"tto/remote"
 )
 
 type config struct {
@@ -47,19 +47,34 @@ func main() {
 	if strings.Compare(config.System.Role, "sender") == 0 {
 		// TODO: daemon that watches the clock based on config.System.Replicate.Interval
 
+		// remote connection setup
+		client := remote.ConnPrep(config.System.Dest, config.System.Port, config.System.User, config.System.Pass)
+		client.Connect()
+
 		// dump DB
 		mysqlDump := database.Dump(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 
+		// TODO: add locking file (use remote.Command("touch .$mysqlDump.sql.lock")
+
 		// open connection to remote server and copy dump over
-		transferConnection := filetransfer.Open(config.System.Dest, config.System.Port, config.System.User, config.System.Pass)
-		filetransfer.Send(transferConnection, mysqlDump, config.System.Replicate.BackupDir)
+		err := client.CopyFile(mysqlDump, config.System.Replicate.BackupDir, "0600")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// TODO: remove locking file
+		// TODO: update remote file with latest transfer. remote.Command("touch .latest.mysql.dump")
+
+		defer client.Close()
+
+		// TODO: close the local mysqldump that was opened
 
 		// delete local dump
-		filetransfer.Cleanup(mysqlDump)
+		Remove(mysqlDump)
 
 	} else if strings.Compare(config.System.Role, "receiver") == 0 {
 		// TODO: daemon that monitors folder for new dumps to restore (should write to a file the name of the last dump that was restored!)
-		//db := database.Open(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+		//db := database.SCPOpen(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
 		//database.Restore(db, mysqlDump)
 	}
 }
@@ -86,3 +101,12 @@ func loadConfig(filename string) (config, error) {
 	err = jsonParser.Decode(&configStruct)
 	return configStruct, err
 }
+
+func Remove(filename string) {
+
+	err := os.Remove(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
