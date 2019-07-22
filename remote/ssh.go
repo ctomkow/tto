@@ -12,7 +12,7 @@ type SSH struct {
 	pass string
 	config *ssh.ClientConfig
 	session *ssh.Session
-	connection ssh.Conn
+	connection *ssh.Client
 }
 
 func ConnPrep(ip string, port string, user string, pass string) *SSH {
@@ -40,9 +40,26 @@ func (sc *SSH) Connect() {
 		log.Fatal(err)
 	}
 
-	sc.connection = client.Conn
+	sc.connection = client
 	sc.session, err = client.NewSession()
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func (sc *SSH) CloseConnection() {
+	sc.connection.Close()
+}
+
+func (sc *SSH) NewSession() {
+
+	var err error
+	sc.session, err = sc.connection.NewSession()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (sc *SSH) CloseSession() {
+	sc.session.Close()
 }

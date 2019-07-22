@@ -79,8 +79,8 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 		}
 	}()
 
-	// time.Duration is in nanoseconds. Default is 10 seconds
-	if waitTimeout(&wg, time.Duration(10000000000)) {
+	// time.Duration is in nanoseconds. Default is 100 seconds
+	if waitTimeout(&wg, time.Duration(100000000000)) {
 		return errors.New("timeout when upload files")
 	}
 
@@ -105,9 +105,4 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return true // timed out
 	}
-}
-
-func (sc *SSH) Close() {
-	sc.session.Close()
-	sc.connection.Close()
 }
