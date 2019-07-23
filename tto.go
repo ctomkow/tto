@@ -1,19 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
-	//"github.com/fsnotify/fsnotify"
-	"log"
+	"github.com/fsnotify/fsnotify"
 	"github.com/takama/daemon"
-	//"net"
+	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
-	//"time"
-	//"tto/database"
-	//"tto/remote"
+	"time"
+	"tto/database"
+	"tto/remote"
 )
 
 type config struct {
@@ -38,19 +40,48 @@ type config struct {
 	}
 }
 
+// Service has embedded daemon
+type Service struct {
+	daemon.Daemon
+	restoreLock bool
+}
+
 const (
 	// name of the service
 	name        = "tto"
 	description = "3-2-1 go!"
 )
 
-// Service has embedded daemon
-type Service struct {
-	daemon.Daemon
+func init() {
+
+	// TODO: handling to ensure .latest.dump and .latest.restore files exist in working directory!
+
+
+	// TODO: deal with all log.Fatal()'s throughout the codebase
+}
+
+func main() {
+
+	// parse cli flags and config file
+	configFile := cliFlags()
+	config, _  := loadConfig(*configFile)
+
+	srv, err := daemon.New(name, description)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	service := &Service{srv, false}
+	status, err := service.Manage(config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(status)
 }
 
 // Manage by daemon commands or run the daemon
-func (service *Service) Manage() (string, error) {
+func (service *Service) Manage(config config) (string, error) {
 
 	usage := "Usage: tto install | remove | start | stop | status"
 
@@ -73,10 +104,29 @@ func (service *Service) Manage() (string, error) {
 		}
 	}
 
-	// TODO: time setup.
-	//certainSomething := true // will cause time loop to repeat
-	//timeDelay := 900 * time.Millisecond // == 900000 * time.Microsecond
-	//var endTime <-chan time.Time // signal for when timer us up
+	// a ticker every config.System.Replicate.Interval Used by the sender
+	interval, err := time.ParseDuration(config.System.Replicate.Interval)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// a file watcher monitoring .latest.dump Used by the receiver
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer watcher.Close()
+
+	// TODO: FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
+	//   https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
+	err = watcher.Add(config.System.Replicate.BackupDir + ".latest.dump")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Set up channel on which to send signal notifications.
 	// We must use a buffered channel or risk missing the signal
@@ -84,108 +134,45 @@ func (service *Service) Manage() (string, error) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
-	// loop work cycle with accept connections or interrupt
-	// by system signal
+	// loop work cycle for sender and receiver or interrupt by system signal
 	for {
 		select {
-		// TODO: when time is triggered, receive notice from time channel. Trigger function that has a goroutine in it
-		//case conn := <-listen:
-		//	go handleClient(conn)
-		// TODO: add another case, where when a file is changed, receive notice from file-change channel, trigger function with goroutine to restore database
-		case killSignal := <-interrupt:
-			fmt.Println("Got signal:", killSignal)
 
-			if killSignal == os.Interrupt {
-				return "Daemon was interrupted by system signal", nil
-			}
-			return "Daemon was killed", nil
+			// for sender, trigger on ticker interval value
+			case timer := <- ticker.C:
+				if strings.Compare(config.System.Role, "sender") == 0 {
+					fmt.Println(timer)
+					config.transferDump(config.dumpDatabase())
+				}
+
+			// for receiver, trigger on event from watching .latest.dump
+			case event, _ := <- watcher.Events:
+				if strings.Compare(config.System.Role, "receiver") == 0 {
+					if triggerOnEvent(event) == true {
+						if service.restoreLock == false {
+							service.restoreLock = true
+							err := config.restore()
+							if err != nil {
+								log.Fatal(err)
+							}
+							service.restoreLock = false
+						}
+					}
+				}
+
+			// for everything, trigger on signal
+			case killSignal := <-interrupt:
+				fmt.Println("Got signal:", killSignal)
+
+				if killSignal == os.Interrupt {
+					return "Daemon was interrupted by system signal", nil
+				}
+				return "Daemon was killed", nil
 		}
 	}
 
 	// never happen, but need to complete code
 	return usage, nil
-}
-
-func init() {
-
-	// TODO: handling to ensure latest.dump and latest.restore files exist in working directory!
-}
-
-func main() {
-
-	// parse cli flags and config file
-	configFile := cliFlags()
-	config, _  := loadConfig(*configFile)
-
-	srv, err := daemon.New(name, description)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	service := &Service{srv}
-	status, err := service.Manage()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(status)
-
-	fmt.Println(config)
-
-	/*
-
-	if strings.Compare(config.System.Role, "sender") == 0 {
-		// TODO: daemon that watches the clock based on config.System.Replicate.Interval
-
-		// connect to remote system
-		client := remote.ConnPrep(config.System.Dest, config.System.Port, config.System.User, config.System.Pass)
-		client.Connect()
-
-		// dump DB
-		mysqlDump := database.Dump(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
-
-		// add lock file on remote system
-		client.NewSession()
-		client.RunCommand("touch " + config.System.Replicate.BackupDir + "~" + mysqlDump + ".lock")
-		client.CloseSession()
-
-		// copy dump to remote system
-		client.NewSession()
-		err := client.CopyFile(mysqlDump, config.System.Replicate.BackupDir, "0600")
-		if err != nil {
-			log.Fatal(err)
-		}
-		client.CloseSession()
-
-		// remove lock file
-		client.NewSession()
-		client.RunCommand("rm " + config.System.Replicate.BackupDir + "~" + mysqlDump + ".lock")
-		client.CloseSession()
-
-		// update latest dump notes on remote system
-		client.NewSession()
-		client.RunCommand("echo " + mysqlDump + " > " + config.System.Replicate.BackupDir + "latest.dump")
-		client.CloseSession()
-
-		// delete local dump
-		Remove(mysqlDump)
-
-	} else if strings.Compare(config.System.Role, "receiver") == 0 {
-
-		// create file watcher
-		//watcher, err := fsnotify.NewWatcher()
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//
-		//err = watcher.Add(config.System.Replicate.BackupDir + "latest.dump")
-
-		//database.Restore(db, mysqlDump)
-
-	}
-
-	*/
-
 }
 
 // parse -conf flag and return as pointer
@@ -217,5 +204,146 @@ func Remove(filename string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func triggerOnEvent(event fsnotify.Event) bool {
+
+	if event.Op&fsnotify.Write == fsnotify.Write {
+		return true
+	}
+    // TODO: add handling for a REMOVE event. e.g. need to re-create the file and re-listen for it
+
+	return false
+}
+
+func (config config) dumpDatabase() string {
+
+	// dump DB
+	mysqlDump := database.Dump(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+
+	return mysqlDump
+}
+
+func (config config) transferDump(mysqlDump string) {
+
+	// connect to remote system
+	client := remote.ConnPrep(config.System.Dest, config.System.Port, config.System.User, config.System.Pass)
+	client.Connect()
+
+	// TODO: add handling for if .lock already exists (fileExists)
+
+	// add lock file on remote system for mysql dump
+	client.NewSession()
+	client.RunCommand("touch " + config.System.Replicate.BackupDir + "~" + mysqlDump + ".lock")
+	client.CloseSession()
+
+	// copy dump to remote system
+	client.NewSession()
+	err := client.CopyFile(mysqlDump, config.System.Replicate.BackupDir, "0600")
+	if err != nil {
+		log.Fatal(err)
+	}
+	client.CloseSession()
+
+	// remove lock file on remote system for mysql dump
+	client.NewSession()
+	client.RunCommand("rm " + config.System.Replicate.BackupDir + "~" + mysqlDump + ".lock")
+	client.CloseSession()
+
+	// TODO: add handling for if .lock already exists (fileExists)
+
+	// add lock file on remote system for .latest.dump
+	client.NewSession()
+	client.RunCommand("touch " + config.System.Replicate.BackupDir + "~.latest.dump.lock")
+	client.CloseSession()
+
+	// update latest dump notes on remote system
+	client.NewSession()
+	client.RunCommand("echo " + mysqlDump + " > " + config.System.Replicate.BackupDir + ".latest.dump")
+	client.CloseSession()
+
+	// remove lock file on remote system for .latest.dump
+	client.NewSession()
+	client.RunCommand("rm " + config.System.Replicate.BackupDir + "~.latest.dump.lock")
+	client.CloseSession()
+
+	// delete local dump
+	Remove(mysqlDump)
+}
+
+func (config config) restore() error {
+
+	// ########### .dump.lock #############
+
+	// check if lock dumpFile exists for .latest.dump
+	if fileExists(config.System.Replicate.BackupDir + "~.latest.dump.lock") {
+		return errors.New("locked: .latest.dump is being used by another process")
+	}
+
+	// TODO: create ~.latest.dump.lock
+
+	// open .latest.dump and read first line
+	dumpFile, err := os.Open(config.System.Replicate.BackupDir + ".latest.dump")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	scanner := bufio.NewScanner(dumpFile)
+	scanner.Scan()
+	latestDump := scanner.Text()
+	dumpFile.Close()
+
+	// TODO: delete ~.latest.dump.lock
+
+	// ########### .restore.lock #############
+
+	// check if lock dumpFile exists for .latest.restore
+	if fileExists(config.System.Replicate.BackupDir + "~.latest.restore.lock") {
+		return errors.New("locked: .latest.restore is being used by another process")
+	}
+
+	// TODO: create ~.latest.restore.lock
+
+	// open .latest.restore and read first line
+	restoreFile, err := os.Open(config.System.Replicate.BackupDir + ".latest.restore")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	scanner = bufio.NewScanner(restoreFile)
+	scanner.Scan()
+	latestRestore := scanner.Text()
+
+	// if dump and restore not the same, then attempt to restore the latestDump
+	if strings.Compare(latestDump, latestRestore) != 0 {
+		// TODO: error handling if database is dropped already... (not that it should be)
+
+		// open connection to database
+		db := database.Open(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+
+		// TODO: add error handling to ensure that if a database.Restore fails, I am not accidentally still writing to .latest.restore
+		// restore mysqldump into database
+		database.Restore(db, config.System.Replicate.BackupDir + latestDump)
+
+		// TODO: ugghh, writing to file is not working. look into this
+		// update .latest.restore with restored dump filename
+		_, _ = restoreFile.WriteString(latestDump + "\n")
+		restoreFile.Close()
+
+		// TODO: delete ~.latest.restore.lock
+
+		return nil
+	}
+
+	return errors.New("database restore of " + config.System.Replicate.BackupDir + latestDump + "failed")
+}
+
+func fileExists(filename string) bool {
+
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }
 
