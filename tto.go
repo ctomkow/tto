@@ -151,7 +151,7 @@ func (service *Service) Manage(config config) (string, error) {
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 	// define event variable
-	var event watcher.Event
+	var event fsnotify.Event
 
 	// daemon work cycle for sender and receiver or interrupt by system signal
 	for {
@@ -173,10 +173,7 @@ func (service *Service) Manage(config config) (string, error) {
 				}
 
 			// for receiver, trigger on event from watching .latest.dump
-			case event, err = <- watcher.Events:
-				if err != nil {
-					return "", err
-				}
+			case event = <- watcher.Events:
 				if strings.Compare(config.System.Role, "receiver") == 0 {
 					if triggerOnEvent(event) {
 						if !service.restoreLock {
@@ -278,7 +275,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	err = client.RunCommand("touch " + config.System.Replicate.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err = client.RunCommand("touch " + config.System.Replicate.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return err
 	}
@@ -300,7 +297,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	err = client.RunCommand("rm " + config.System.Replicate.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err = client.RunCommand("rm " + config.System.Replicate.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return err
 	}
@@ -311,7 +308,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	err = client.RunCommand("touch " + config.System.Replicate.WorkingDir + "~.latest.dump.lock")
+	_, err = client.RunCommand("touch " + config.System.Replicate.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
@@ -322,7 +319,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	err = client.RunCommand("echo " + mysqlDump + " > " + config.System.Replicate.WorkingDir + ".latest.dump")
+	_, err = client.RunCommand("echo " + mysqlDump + " > " + config.System.Replicate.WorkingDir + ".latest.dump")
 	if err != nil {
 		return err
 	}
@@ -333,7 +330,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	err = client.RunCommand("rm " + config.System.Replicate.WorkingDir + "~.latest.dump.lock")
+	_, err = client.RunCommand("rm " + config.System.Replicate.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
