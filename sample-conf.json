@@ -5,10 +5,10 @@
         "port": "22",
         "user": "user",
         "pass": "pass",
+        "working_dir": "/opt/tto/",
         "replicate": {
             "mysql": "true",
             "interval": "7200",
-            "working_dir": "/opt/tto/var/"
         }
     },
     "mysql": {

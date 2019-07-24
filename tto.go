@@ -23,15 +23,15 @@ import (
 
 type config struct {
 	System struct {
-		Role      string `json:"role"`
-		Dest      string `json:"dest"`
-		Port      string `json:"port"`
-		User      string `json:"user"`
-		Pass      string `json:"pass"`
+		Role       string `json:"role"`
+		Dest       string `json:"dest"`
+		Port       string `json:"port"`
+		User       string `json:"user"`
+		Pass       string `json:"pass"`
+		WorkingDir string `json:"working_dir"`
 		Replicate struct {
 			Mysql      string `json:"mysql"`
 			Interval   string `json:"interval"`
-			WorkingDir string `json:"working_dir"`
 		}
 	}
 	Mysql struct {
@@ -57,29 +57,32 @@ const (
 
 func main() {
 
-	// parse cli flags and config file
+	// parse cli flags
 	configFile := cliFlags()
-	config, err  := loadConfig(*configFile)
+
+	// parse config
+	config := config{}
+	err  := config.loadConfig("/etc/tto/" + *configFile)
 	if err != nil {
 		glog.Exit(err)
 	}
 
 	// ensure working directory files exists
-	if !fileExists(config.System.Replicate.WorkingDir + ".latest.dump") {
-		_, err := os.Create(config.System.Replicate.WorkingDir + ".latest.dump")
+	if !fileExists(config.System.WorkingDir + ".latest.dump") {
+		_, err := os.Create(config.System.WorkingDir + ".latest.dump")
 		if err != nil {
 			glog.Exit(err)
 		}
-		glog.Info("created file: " + config.System.Replicate.WorkingDir + ".latest.dump")
+		glog.Info("created file: " + config.System.WorkingDir + ".latest.dump")
 	}
 
 	// ensure working directory files exists
-	if !fileExists(config.System.Replicate.WorkingDir + ".latest.restore") {
-		_, err := os.Create(config.System.Replicate.WorkingDir + ".latest.restore")
+	if !fileExists(config.System.WorkingDir + ".latest.restore") {
+		_, err := os.Create(config.System.WorkingDir + ".latest.restore")
 		if err != nil {
 			glog.Exit(err)
 		}
-		glog.Info("created file: " + config.System.Replicate.WorkingDir + ".latest.restore")
+		glog.Info("created file: " + config.System.WorkingDir + ".latest.restore")
 	}
 
 	srv, err := daemon.New(name, description)
@@ -93,6 +96,7 @@ func main() {
 		glog.Fatal(err)
 	}
 	glog.Info(status)
+	glog.Flush()
 }
 
 // Manage by daemon commands or run the daemon
@@ -105,6 +109,15 @@ func (service *Service) Manage(config config) (string, error) {
 		command := os.Args[1]
 		switch command {
 		case "install":
+
+			// create config directory
+			err := os.MkdirAll("/etc/tto", os.ModePerm)
+			if err != nil {
+				glog.Fatal(err)
+			}
+
+			// TODO: write sample conf.json to directory based on struct
+
 			return service.Install()
 		case "remove":
 			return service.Remove()
@@ -115,11 +128,8 @@ func (service *Service) Manage(config config) (string, error) {
 		case "status":
 			return service.Status()
 		default:
-			//return usage, nil
-			glog.Info("daemon is running in the foreground. ensure -logtostderr flag was selected")
+			return usage, nil
 		}
-	} else {
-		glog.Exit("attempting to run daemon in the foreground but failed. ensure -logtostderr flag is selected")
 	}
 
 	// a ticker every config.System.Replicate.Interval Used by the sender
@@ -139,7 +149,7 @@ func (service *Service) Manage(config config) (string, error) {
 
 	// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
 	// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
-	err = watcher.Add(config.System.Replicate.WorkingDir + ".latest.dump")
+	err = watcher.Add(config.System.WorkingDir + ".latest.dump")
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -157,8 +167,8 @@ func (service *Service) Manage(config config) (string, error) {
 	for {
 		select {
 
-			// for sender, trigger on ticker interval value
-			case timer := <- ticker.C:
+				// for sender, trigger on ticker interval value
+			case timer := <-ticker.C:
 				if strings.Compare(config.System.Role, "sender") == 0 {
 					glog.Info("ticker interval " + timer.String())
 					mysqlDump, err := config.dumpDatabase()
@@ -172,8 +182,8 @@ func (service *Service) Manage(config config) (string, error) {
 					}
 				}
 
-			// for receiver, trigger on event from watching .latest.dump
-			case event = <- watcher.Events:
+				// for receiver, trigger on event from watching .latest.dump
+			case event = <-watcher.Events:
 				if strings.Compare(config.System.Role, "receiver") == 0 {
 					if triggerOnEvent(event) {
 						if !service.restoreLock {
@@ -184,11 +194,11 @@ func (service *Service) Manage(config config) (string, error) {
 							}
 							service.restoreLock = false
 						} // else, silently skip and don't attempt to restore database as it's currently in progress
-						  // this also handles any double firing of watched WRITE events, that some editors create
+						// this also handles any double firing of watched WRITE events, that some editors create
 					}
 				}
 
-			// trigger on signal
+				// trigger on signal
 			case killSignal := <-interrupt:
 				glog.Error(killSignal)
 
@@ -196,36 +206,43 @@ func (service *Service) Manage(config config) (string, error) {
 					return "", errors.New("daemon was interrupted by system signal")
 				}
 				return "", errors.New("daemon was killed")
+
 		}
 	}
 
 	return usage, nil
 }
 
+
 // parse -conf flag and return as pointer
 func cliFlags() *string {
 
+	// override glog default logging to stderr so daemon managers can read the logs (docker, systemd)
+	flag.Set("logtostderr", "true")
+	// default conf file
 	confFilePtr := flag.String("conf", "conf.json", "name of conf file.")
+
 	flag.Parse()
 	return confFilePtr
 }
 
-func loadConfig(filename string) (config, error) {
+func (config *config) loadConfig(filename string) error {
 
-	var config config
+	// TODO: config file input validation. Depends if the app is a sender or receiver
+
 	fd, err := os.Open(filename)
 	if err != nil {
-		return config, err
+		return err
 	}
 	defer fd.Close()
 
 	jsonParser := json.NewDecoder(fd)
 	err = jsonParser.Decode(&config)
 	if err != nil {
-		return config, err
+		return err
 	}
 
-	return config, nil
+	return nil
 }
 
 func Remove(filename string) error {
@@ -275,7 +292,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	_, err = client.RunCommand("touch " + config.System.Replicate.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err = client.RunCommand("touch " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return err
 	}
@@ -286,7 +303,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	err = client.CopyFile(mysqlDump, config.System.Replicate.WorkingDir, "0600")
+	err = client.CopyFile(mysqlDump, config.System.WorkingDir, "0600")
 	if err != nil {
 		return err
 	}
@@ -297,7 +314,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	_, err = client.RunCommand("rm " + config.System.Replicate.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return err
 	}
@@ -308,7 +325,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	_, err = client.RunCommand("touch " + config.System.Replicate.WorkingDir + "~.latest.dump.lock")
+	_, err = client.RunCommand("touch " + config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
@@ -319,7 +336,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	_, err = client.RunCommand("echo " + mysqlDump + " > " + config.System.Replicate.WorkingDir + ".latest.dump")
+	_, err = client.RunCommand("echo " + mysqlDump + " > " + config.System.WorkingDir + ".latest.dump")
 	if err != nil {
 		return err
 	}
@@ -330,7 +347,7 @@ func (config config) transferDump(mysqlDump string) error {
 		return err
 	}
 	defer client.CloseSession()
-	_, err = client.RunCommand("rm " + config.System.Replicate.WorkingDir + "~.latest.dump.lock")
+	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
@@ -349,18 +366,18 @@ func (config config) restore() error {
 	// ########### .latest.dump #############
 
 	// check if lock dumpFile exists for .latest.dump
-	if fileExists(config.System.Replicate.WorkingDir + "~.latest.dump.lock") {
+	if fileExists(config.System.WorkingDir + "~.latest.dump.lock") {
 		return errors.New("locked: .latest.dump is being used by another process")
 	}
 
 	// create ~.latest.dump.lock
-	_, err := os.Create(config.System.Replicate.WorkingDir + "~.latest.dump.lock")
+	_, err := os.Create(config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
 
 	// open .latest.dump and read first line
-	dumpFile, err := os.Open(config.System.Replicate.WorkingDir + ".latest.dump")
+	dumpFile, err := os.Open(config.System.WorkingDir + ".latest.dump")
 	if err != nil {
 		return err
 	}
@@ -374,7 +391,7 @@ func (config config) restore() error {
 	}
 
 	// delete ~.latest.dump.lock
-	err = os.Remove(config.System.Replicate.WorkingDir + "~.latest.dump.lock")
+	err = os.Remove(config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
@@ -382,7 +399,7 @@ func (config config) restore() error {
 	// ########### .latest.restore #############
 
 	// open .latest.restore and read first line
-	restoreFile, err := os.Open(config.System.Replicate.WorkingDir + ".latest.restore")
+	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restore")
 	if err != nil {
 		return err
 	}
@@ -406,13 +423,13 @@ func (config config) restore() error {
 		}
 
 		// restore mysqldump into database
-		err = database.Restore(db, config.System.Replicate.WorkingDir+ latestDump)
+		err = database.Restore(db, config.System.WorkingDir+ latestDump)
 		if err != nil {
 			return err
 		}
 
 		// update .latest.restore with restored dump filename
-		err = ioutil.WriteFile(config.System.Replicate.WorkingDir+ ".latest.restore", []byte(latestDump), 0600)
+		err = ioutil.WriteFile(config.System.WorkingDir+ ".latest.restore", []byte(latestDump), 0600)
 		if err != nil {
 			return err
 		}
