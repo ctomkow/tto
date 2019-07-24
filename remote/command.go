@@ -1,18 +1,20 @@
+// Craig Tomkow
+// July 24, 2019
+
 package remote
 
 import (
 	"bytes"
-	"log"
 )
 
-func (sc *SSH) RunCommand(command string) string {
+func (sc *SSH) RunCommand(command string) (string, error) {
 
 	var stdoutBuffer bytes.Buffer
 	sc.session.Stdout = &stdoutBuffer
 	err := sc.session.Run(command)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
-	return stdoutBuffer.String()
+	return stdoutBuffer.String(), nil
 }

@@ -1,3 +1,6 @@
+// Craig Tomkow
+// July 24, 2019
+
 // Modified from copyrighted work by Bram Vandenbogaerde (https://github.com/bramvdbogaerde/go-scp)
 
 package remote
@@ -8,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"sync"
@@ -19,12 +21,12 @@ func (sc *SSH) CopyFile(filename string, remotePath string, permissions string) 
 
 	fd, err := os.Open(filename)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	contentBytes, err := ioutil.ReadAll(fd)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	byteReader := bytes.NewReader(contentBytes)
 

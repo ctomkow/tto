@@ -1,3 +1,6 @@
+// Craig Tomkow
+// July 24, 2019
+
 package database
 
 import (
@@ -6,49 +9,49 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (db *sql.DB) {
+func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (*sql.DB, error) {
 
 	// prep DB connection
 	db, err := sql.Open("mysql", dbUser + ":" + dbPass + "@tcp(" + dbIp + ":" + dbPort + ")/" + dbName)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	err = db.Ping()
-
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return db
+	return db, nil
 }
 
-
-func Drop(db *sql.DB, dbName string) {
+func Drop(db *sql.DB, dbName string) error {
 
 	_, err := db.Exec("DROP DATABASE " + dbName + ";")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
 }
 
-func Create(db *sql.DB, dbName string) {
+func Create(db *sql.DB, dbName string) error {
 
 	_, err := db.Exec("CREATE DATABASE " + dbName + ";")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
+	return nil
 }
 
-func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) string {
+func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (string, error) {
 
 	// YYYYMMDDhhmmss
 	currentTime := time.Now().Format("20060102150405")
@@ -61,36 +64,37 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 
 	cmd := exec.Command("mysqldump", "--single-transaction", "--routines", "--triggers", portArg, ipArg, userArg, passArg, dbName)
 	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
 	defer stdout.Close()
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	err = cmd.Start()
-
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	bytes, err := ioutil.ReadAll(stdout)
-
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	err = ioutil.WriteFile(sqlFile, bytes, 0644)
-	return sqlFile
+	if err != nil {
+		return "", err
+	}
+
+	return sqlFile, nil
 }
 
-func Restore(db *sql.DB, dump string) {
+func Restore(db *sql.DB, dump string) error {
 
 	// read .sql statement by statement and fire off to database server
 	// NOTE: bufio.NewScanner has a line length limit of 65536 chars. mysqldump does only one INSERT per table. Not good!
 	//       Using ReadString with a ';' delimiter, ensuring that the next character after is '\n'
 	fd, err := os.Open(dump)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer fd.Close()
 
@@ -112,7 +116,7 @@ func Restore(db *sql.DB, dump string) {
 		// look at next byte
 		oracleBytes, err := reader.Peek(1)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		//fmt.Print(buffer.String())
@@ -121,7 +125,7 @@ func Restore(db *sql.DB, dump string) {
 		if oracleBytes[0] == 10 { // newline '\n' aka utf decimal '10'
 			_, err = db.Exec(buffer.String())
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			buffer.Reset()
 		} else {
@@ -129,4 +133,5 @@ func Restore(db *sql.DB, dump string) {
 		}
 	}
 
+	return nil
 }

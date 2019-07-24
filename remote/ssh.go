@@ -1,8 +1,10 @@
+// Craig Tomkow
+// July 24, 2019
+
 package remote
 
 import (
 	"golang.org/x/crypto/ssh"
-	"log"
 )
 
 type SSH struct {
@@ -34,30 +36,39 @@ func ConnPrep(ip string, port string, user string, pass string) *SSH {
 	}
 }
 
-func (sc *SSH) Connect() {
+func (sc *SSH) Connect() error {
 	client, err := ssh.Dial("tcp", sc.remoteHostName + ":" + sc.remoteHostPort, sc.config)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	sc.connection = client
 	sc.session, err = client.NewSession()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
 }
 
-func (sc *SSH) CloseConnection() {
-	sc.connection.Close()
+func (sc *SSH) CloseConnection() error {
+	err := sc.connection.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (sc *SSH) NewSession() {
+func (sc *SSH) NewSession() error {
 
 	var err error
 	sc.session, err = sc.connection.NewSession()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
 }
 
 func (sc *SSH) CloseSession() {
