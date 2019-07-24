@@ -1,7 +1,7 @@
 // Craig Tomkow
 // July 24, 2019
 
-// Modified from copyrighted work by Bram Vandenbogaerde (https://github.com/bramvdbogaerde/go-scp)
+// Modified from copyrighted work (Mozilla Public License 2.0) by Bram Vandenbogaerde (https://github.com/bramvdbogaerde/go-scp)
 
 package remote
 
