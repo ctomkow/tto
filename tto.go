@@ -25,23 +25,31 @@ import (
 
 type config struct {
 	System struct {
-		Role       string `json:"role"`
-		Dest       string `json:"dest"`
-		Port       string `json:"port"`
 		User       string `json:"user"`
 		Pass       string `json:"pass"`
 		WorkingDir string `json:"working_dir"`
-		Replicate struct {
-			Mysql      string `json:"mysql"`
-			Interval   string `json:"interval"`
+		Type       string `json:"type"`
+		Role       struct {
+			Sender struct {
+				Dest     string `json:"dest"`
+				Port     string `json:"port"`
+				Database string `json:"database"`
+				DBip     string `json:"db_ip"`
+				DBport   string `json:"db_port"`
+				DBuser   string `json:"db_user"`
+				DBpass   string `json:"db_pass"`
+				DBname   string `json:"db_name"`
+				Interval string `json:"interval"`
+			}
+			Receiver struct {
+				Database string `json:"database"`
+				DBip     string `json:"db_ip"`
+				DBport   string `json:"db_port"`
+				DBuser   string `json:"db_user"`
+				DBpass   string `json:"db_pass"`
+				DBname   string `json:"db_name"`
+			}
 		}
-	}
-	Mysql struct {
-		DBip   string `json:"db_ip"`
-		DBport string `json:"db_port"`
-		DBuser string `json:"db_user"`
-		DBpass string `json:"db_pass"`
-		DBname string `json:"db_name"`
 	}
 }
 
@@ -93,19 +101,24 @@ func main() {
 
 				sampleConfig := &config{}
 
-				sampleConfig.System.Role = `[sender|receiver]`
-				sampleConfig.System.Dest = `x.x.x.x`
-				sampleConfig.System.Port = `22`
 				sampleConfig.System.User = `username`
 				sampleConfig.System.Pass = `password`
 				sampleConfig.System.WorkingDir = `/opt/tto/`
-				sampleConfig.System.Replicate.Mysql = `[true|false]`
-				sampleConfig.System.Replicate.Interval = `[0000s|00m|00h|00d]`
-				sampleConfig.Mysql.DBip = `y.y.y.y`
-				sampleConfig.Mysql.DBport = `3306`
-				sampleConfig.Mysql.DBuser = `username`
-				sampleConfig.Mysql.DBpass = `password`
-				sampleConfig.Mysql.DBname = `databaseName`
+				sampleConfig.System.Type = `[sender|receiver]`
+				sampleConfig.System.Role.Sender.Dest = `x.x.x.x`
+				sampleConfig.System.Role.Sender.Port = `22`
+				sampleConfig.System.Role.Sender.Database = `mysql`
+				sampleConfig.System.Role.Sender.DBip = `y.y.y.y`
+				sampleConfig.System.Role.Sender.DBport = `3306`
+				sampleConfig.System.Role.Sender.DBuser = `username`
+				sampleConfig.System.Role.Sender.DBpass = `password`
+				sampleConfig.System.Role.Sender.DBname = `databaseName`
+				sampleConfig.System.Role.Sender.Interval = `[0000s|00m|00h|00d]`
+				sampleConfig.System.Role.Receiver.DBip = `z.z.z.z`
+				sampleConfig.System.Role.Receiver.DBport = `3306`
+				sampleConfig.System.Role.Receiver.DBuser = `username`
+				sampleConfig.System.Role.Receiver.DBpass = `password`
+				sampleConfig.System.Role.Receiver.DBname = `databaseName`
 
 				var jsonData []byte
 				jsonData, err = json.MarshalIndent(sampleConfig, "", "    ")
@@ -218,8 +231,8 @@ func (service *Service) Manage(config config, command *command) (string, error) 
 
 	}
 
-	// a ticker every config.System.Replicate.Interval Used by the sender
-	interval, err := time.ParseDuration(config.System.Replicate.Interval)
+	// a ticker every config.System.Role.Sender.Interval Used by the sender
+	interval, err := time.ParseDuration(config.System.Role.Sender.Interval)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -256,7 +269,7 @@ func (service *Service) Manage(config config, command *command) (string, error) 
 
 				// for sender, trigger on ticker interval value
 			case timer := <-ticker.C:
-				if strings.Compare(config.System.Role, "sender") == 0 {
+				if strings.Compare(config.System.Type, "sender") == 0 {
 					glog.Info("ticker interval " + timer.String())
 					mysqlDump, err := config.dumpDatabase()
 					if err != nil {
@@ -273,7 +286,7 @@ func (service *Service) Manage(config config, command *command) (string, error) 
 				// for receiver, trigger on event from watching .latest.dump
 				// TODO: config.restore() should be called as a goroutine, so it doesn't block, but still have a service.restoreLock while doing it's thing
 			case event = <-watcher.Events:
-				if strings.Compare(config.System.Role, "receiver") == 0 {
+				if strings.Compare(config.System.Type, "receiver") == 0 {
 					if triggerOnEvent(event) {
 						if !service.restoreLock {
 							service.restoreLock = true
@@ -380,7 +393,13 @@ func triggerOnEvent(event fsnotify.Event) bool {
 func (config config) dumpDatabase() (string, error) {
 
 	// dump DB
-	mysqlDump, err := database.Dump(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname, config.System.WorkingDir)
+	mysqlDump, err := database.Dump(
+		config.System.Role.Sender.DBport,
+		config.System.Role.Sender.DBip,
+		config.System.Role.Sender.DBuser,
+		config.System.Role.Sender.DBpass,
+		config.System.Role.Sender.DBname,
+		config.System.WorkingDir)
 	if err != nil {
 		return "", err
 	}
@@ -391,7 +410,11 @@ func (config config) dumpDatabase() (string, error) {
 func (config config) transferDump(mysqlDump string) (string, error) {
 
 	// connect to remote system
-	client := remote.ConnPrep(config.System.Dest, config.System.Port, config.System.User, config.System.Pass)
+	client := remote.ConnPrep(
+		config.System.Role.Sender.Dest,
+		config.System.Role.Sender.Port,
+		config.System.User,
+		config.System.Pass)
 	err := client.Connect()
 	if err != nil {
 		return "", err
@@ -539,19 +562,24 @@ func (config config) restore() (string, error) {
 		// TODO: error handling if database is DROP'd already... (not that it should be)
 
 		// open connection to database
-		db, err := database.Open(config.Mysql.DBport, config.Mysql.DBip, config.Mysql.DBuser, config.Mysql.DBpass, config.Mysql.DBname)
+		db, err := database.Open(
+			config.System.Role.Receiver.DBport,
+			config.System.Role.Receiver.DBip,
+			config.System.Role.Receiver.DBuser,
+			config.System.Role.Receiver.DBpass,
+			config.System.Role.Receiver.DBname)
 		if err != nil {
 			return "", err
 		}
 
 		// restore mysqldump into database
-		err = database.Restore(db, config.System.WorkingDir+ latestDump)
+		err = database.Restore(db, config.System.WorkingDir + latestDump)
 		if err != nil {
 			return "", err
 		}
 
 		// update .latest.restore with restored dump filename
-		err = ioutil.WriteFile(config.System.WorkingDir+ ".latest.restore", []byte(latestDump), 0600)
+		err = ioutil.WriteFile(config.System.WorkingDir + ".latest.restore", []byte(latestDump), 0600)
 		if err != nil {
 			return "", err
 		}
