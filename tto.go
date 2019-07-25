@@ -23,6 +23,8 @@ import (
 	"tto/remote"
 )
 
+// ##### structs #####
+
 type config struct {
 	System struct {
 		User       string `json:"user"`
@@ -66,11 +68,58 @@ type Service struct {
 	restoreLock bool
 }
 
+// ##### constants #####
+
 const (
 	// name of the service
 	name        = "tto"
 	description = "3-2-1 go!"
 )
+
+// ##### methods #####
+
+func (command *command) cliCommands() {
+
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		switch cmd {
+		case "install":
+			command.install = true
+		case "remove":
+			command.remove = true
+		case "start":
+			command.start = true
+		case "stop":
+			command.stop = true
+		case "status":
+			command.status = true
+		}
+	}
+}
+
+func (config *config) loadConfig(filename string) error {
+
+	// TODO: config file input validation. Depends if the app is a sender or receiver
+
+	fd, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := fd.Close(); err != nil {
+			glog.Exit(err)
+		}
+	}()
+
+	jsonParser := json.NewDecoder(fd)
+	if err = jsonParser.Decode(&config); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ##### main #####
 
 func main() {
 
@@ -96,7 +145,11 @@ func main() {
 				if err != nil {
 					glog.Exit(err)
 				}
-				defer fd.Close()
+				defer func() {
+					if err := fd.Close(); err != nil {
+						glog.Exit(err)
+					}
+				}()
 
 				sampleConfig := &config{}
 
@@ -187,7 +240,7 @@ func main() {
 		glog.Exit(err)
 	}
 
-	// TODO: run service as a usr! This should be set in the systemd service file
+	// TODO: run service as a user! This should be set in the systemd service file
 
 	// what is my role
 	daemonRole := config.System.Type
@@ -207,7 +260,8 @@ func main() {
 	glog.Flush()
 }
 
-// Manage by daemon commands or run the daemon
+// ##### daemon manager #####
+
 func (service *Service) Manage(config config, command *command, role string) (string, error) {
 
 	usage := "Usage: tto install | remove | start | stop | status"
@@ -262,6 +316,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 						glog.Info(errors.New("dumped and copied over database: " + copiedDump))
 					}
 
+
 				// trigger on signal
 				case killSignal := <-interrupt:
 					glog.Error(killSignal)
@@ -280,7 +335,11 @@ func (service *Service) Manage(config config, command *command, role string) (st
 			if err != nil {
 				glog.Fatal(err)
 			}
-			defer watcher.Close()
+			defer func() {
+				if err := watcher.Close(); err != nil {
+					glog.Exit(err)
+				}
+			}()
 
 			// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
 			// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
@@ -297,7 +356,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 				// trigger on write event
 				case event = <-watcher.Events:
-					if triggerOnEvent(event) {
+					if isWriteEvent(event) {
 						if !service.restoreLock {
 
 							service.restoreLock = true
@@ -345,7 +404,9 @@ func (service *Service) Manage(config config, command *command, role string) (st
 	return usage, nil
 }
 
+// ##### helper functions #####
 
+// TODO: rework cli parsing, there is glog flags, custom made -conf flag, plus earlier subcommands are read directly
 // parse -conf flag and return as pointer
 func cliFlags() *string {
 
@@ -360,63 +421,18 @@ func cliFlags() *string {
 	return confFilePtr
 }
 
-func (command *command) cliCommands() {
+// ## event helpers ##
 
-	if len(os.Args) > 1 {
-		cmd := os.Args[1]
-		switch cmd {
-			case "install":
-				command.install = true
-			case "remove":
-				command.remove = true
-			case "start":
-				command.start = true
-			case "stop":
-				command.stop = true
-			case "status":
-				command.status = true
-		}
-	}
-
-}
-
-func (config *config) loadConfig(filename string) error {
-
-	// TODO: config file input validation. Depends if the app is a sender or receiver
-
-	fd, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-
-	jsonParser := json.NewDecoder(fd)
-	if err = jsonParser.Decode(&config); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func Remove(filename string) error {
-
-	if err := os.Remove(filename); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func triggerOnEvent(event fsnotify.Event) bool {
+func isWriteEvent(event fsnotify.Event) bool {
 
 	if event.Op&fsnotify.Write == fsnotify.Write {
 		return true
 	}
 
-    // TODO: add handling for a REMOVE event. e.g. need to re-create the file and re-listen for it
-
 	return false
 }
+
+// ## database helpers ##
 
 func (config config) dumpDatabase() (string, error) {
 
@@ -451,7 +467,11 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err := client.NewSession(); err != nil {
 		return "", err
 	}
-	defer client.CloseSession()
+	defer func() {
+		if err := client.CloseSession(); err != nil {
+			glog.Error(err)
+		}
+	}()
 	_, err := client.RunCommand("touch " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
@@ -461,7 +481,11 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer client.CloseSession()
+	defer func() {
+		if err := client.CloseSession(); err != nil {
+			glog.Error(err)
+		}
+	}()
 	if err = client.CopyFile(mysqlDump, config.System.WorkingDir, "0600"); err != nil {
 		return "", err
 	}
@@ -470,7 +494,11 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer client.CloseSession()
+	defer func() {
+		if err := client.CloseSession(); err != nil {
+			glog.Error(err)
+		}
+	}()
 	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
@@ -480,7 +508,11 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer client.CloseSession()
+	defer func() {
+		if err := client.CloseSession(); err != nil {
+			glog.Error(err)
+		}
+	}()
 	_, err = client.RunCommand("touch " + config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
@@ -490,7 +522,11 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer client.CloseSession()
+	defer func() {
+		if err := client.CloseSession(); err != nil {
+			glog.Error(err)
+		}
+	}()
 	_, err = client.RunCommand("echo " + mysqlDump + " > " + config.System.WorkingDir + ".latest.dump")
 	if err != nil {
 		return "", err
@@ -500,14 +536,18 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer client.CloseSession()
+	defer func() {
+		if err := client.CloseSession(); err != nil {
+			glog.Error(err)
+		}
+	}()
 	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
 	}
 
 	// delete local dump
-	if err = Remove(config.System.WorkingDir + mysqlDump); err != nil {
+	if err = removeFile(config.System.WorkingDir + mysqlDump); err != nil {
 		return "", err
 	}
 
@@ -516,7 +556,7 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 
 func (config config) restore() (string, error) {
 
-	// ########### .latest.dump #############
+	// ## .latest.dump actions
 
 	// check if lock dumpFile exists for .latest.dump
 	// retries 3 times with a 3 second sleep inbetween. Used for unfortunate timings...
@@ -564,7 +604,7 @@ func (config config) restore() (string, error) {
 		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
 
-	// ########### .latest.restore #############
+	// ## .latest.restore actions
 
 	// open .latest.restore and read first line
 	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restore")
@@ -610,6 +650,8 @@ func (config config) restore() (string, error) {
 	return "", errors.New(".latest.dump and .latest.restore are the same")
 }
 
+// ## file helpers ##
+
 func fileExists(filename string) bool {
 
 	info, err := os.Stat(filename)
@@ -619,3 +661,11 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+func removeFile(filename string) error {
+
+	if err := os.Remove(filename); err != nil {
+		return err
+	}
+
+	return nil
+}

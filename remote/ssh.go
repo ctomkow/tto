@@ -7,6 +7,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// ##### structs #####
+
 type SSH struct {
 	remoteHostName string
 	remoteHostPort string
@@ -17,6 +19,9 @@ type SSH struct {
 	connection *ssh.Client
 }
 
+// ##### public functions #####
+
+// TODO: support for keys
 func ConnPrep(ip string, port string, user string, pass string) *SSH {
 
 	conf := &ssh.ClientConfig{
@@ -51,14 +56,6 @@ func (sc *SSH) Connect() error {
 	return nil
 }
 
-func (sc *SSH) CloseConnection() error {
-	if err := sc.connection.Close(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (sc *SSH) NewSession() error {
 
 	var err error
@@ -70,6 +67,18 @@ func (sc *SSH) NewSession() error {
 	return nil
 }
 
-func (sc *SSH) CloseSession() {
-	sc.session.Close()
+func (sc *SSH) CloseConnection() error {
+	if err := sc.connection.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sc *SSH) CloseSession() error {
+	if err := sc.session.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }

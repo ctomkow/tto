@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"time"
 )
+
+// ##### public functions #####
 
 func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (*sql.DB, error) {
 
@@ -29,26 +32,6 @@ func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 	}
 
 	return db, nil
-}
-
-func Drop(db *sql.DB, dbName string) error {
-
-	_, err := db.Exec("DROP DATABASE " + dbName + ";")
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func Create(db *sql.DB, dbName string) error {
-
-	_, err := db.Exec("CREATE DATABASE " + dbName + ";")
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string, workingDir string) (string, error) {
@@ -67,7 +50,11 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 	if err != nil {
 		return "", err
 	}
-	defer stdout.Close()
+	defer func() {
+		if err := stdout.Close(); err != nil {
+			glog.Error(err)
+		}
+	}()
 
 	if err = cmd.Start(); err != nil {
 		return "", err
@@ -94,7 +81,11 @@ func Restore(db *sql.DB, dump string) error {
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
+	defer func() {
+		if err := fd.Close(); err != nil {
+			glog.Error(err)
+		}
+	}()
 
 	reader := bufio.NewReader(fd)
 	var buffer strings.Builder
@@ -129,6 +120,26 @@ func Restore(db *sql.DB, dump string) error {
 		} else {
 			continue
 		}
+	}
+
+	return nil
+}
+
+func Drop(db *sql.DB, dbName string) error {
+
+	_, err := db.Exec("DROP DATABASE " + dbName + ";")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Create(db *sql.DB, dbName string) error {
+
+	_, err := db.Exec("CREATE DATABASE " + dbName + ";")
+	if err != nil {
+		return err
 	}
 
 	return nil

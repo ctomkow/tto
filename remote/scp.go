@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"sync"
 	"time"
 )
+
+// ##### public methods #####
 
 func (sc *SSH) CopyFile(filename string, workingDir string, permissions string) error {
 
@@ -34,6 +37,8 @@ func (sc *SSH) CopyFile(filename string, workingDir string, permissions string) 
 
 }
 
+// ##### private methods #####
+
 func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size int64) error {
 
 	filename := path.Base(absolutePath)
@@ -51,7 +56,11 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 			errCh <- err
 			return
 		}
-		defer w.Close()
+		defer func() {
+			if err := w.Close(); err != nil {
+				glog.Exit(err)
+			}
+		}()
 
 		_, err = fmt.Fprintln(w, "C"+permissions, size, filename)
 		if err != nil {
@@ -81,6 +90,7 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 		}
 	}()
 
+	// TODO: remove static timeout
 	// time.Duration is in nanoseconds. Default is 100 seconds
 	if waitTimeout(&wg, time.Duration(100000000000)) {
 		return errors.New("timeout when upload files")
