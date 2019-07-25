@@ -52,8 +52,7 @@ func (sc *SSH) Connect() error {
 }
 
 func (sc *SSH) CloseConnection() error {
-	err := sc.connection.Close()
-	if err != nil {
+	if err := sc.connection.Close(); err != nil {
 		return err
 	}
 

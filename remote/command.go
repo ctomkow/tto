@@ -11,8 +11,7 @@ func (sc *SSH) RunCommand(command string) (string, error) {
 
 	var stdoutBuffer bytes.Buffer
 	sc.session.Stdout = &stdoutBuffer
-	err := sc.session.Run(command)
-	if err != nil {
+	if err := sc.session.Run(command); err != nil {
 		return "", err
 	}
 

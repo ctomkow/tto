@@ -60,7 +60,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 	ipArg   := "-h" + dbIp
 	userArg := "-u" + dbUser
 	passArg := "-p" + dbPass
-	sqlFile := dbName + currentTime + ".sql"
+	sqlFile := dbName + "-" + currentTime + ".sql"
 
 	cmd := exec.Command("mysqldump", "--single-transaction", "--routines", "--triggers", portArg, ipArg, userArg, passArg, dbName)
 	stdout, err := cmd.StdoutPipe()
@@ -69,8 +69,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 	}
 	defer stdout.Close()
 
-	err = cmd.Start()
-	if err != nil {
+	if err = cmd.Start(); err != nil {
 		return "", err
 	}
 
@@ -79,8 +78,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 		return "", err
 	}
 
-	err = ioutil.WriteFile(workingDir + sqlFile, bytes, 0644)
-	if err != nil {
+	if err = ioutil.WriteFile(workingDir + sqlFile, bytes, 0644); err != nil {
 		return "", err
 	}
 

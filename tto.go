@@ -86,8 +86,7 @@ func main() {
 		case command.install:
 
 			// create config directory if it doesn't exist
-			err := os.MkdirAll("/etc/tto/", os.ModePerm)
-			if err != nil {
+			if err := os.MkdirAll("/etc/tto/", os.ModePerm); err != nil {
 				glog.Fatal(err)
 			}
 
@@ -101,25 +100,25 @@ func main() {
 
 				sampleConfig := &config{}
 
-				sampleConfig.System.User = `username`
-				sampleConfig.System.Pass = `password`
-				sampleConfig.System.WorkingDir = `/opt/tto/`
-				sampleConfig.System.Type = `sender|receiver`
-				sampleConfig.System.Role.Sender.Dest = `x.x.x.x`
-				sampleConfig.System.Role.Sender.Port = `22`
-				sampleConfig.System.Role.Sender.Database = `mysql`
-				sampleConfig.System.Role.Sender.DBip = `y.y.y.y`
-				sampleConfig.System.Role.Sender.DBport = `3306`
-				sampleConfig.System.Role.Sender.DBuser = `username`
-				sampleConfig.System.Role.Sender.DBpass = `password`
-				sampleConfig.System.Role.Sender.DBname = `databaseName`
-				sampleConfig.System.Role.Sender.Interval = `0000s|00m|00h|00d`
+				sampleConfig.System.User 				   = `username`
+				sampleConfig.System.Pass 				   = `password`
+				sampleConfig.System.WorkingDir 		  	   = `/opt/tto/`
+				sampleConfig.System.Type 				   = `sender|receiver`
+				sampleConfig.System.Role.Sender.Dest 	   = `x.x.x.x`
+				sampleConfig.System.Role.Sender.Port 	   = `22`
+				sampleConfig.System.Role.Sender.Database   = `mysql`
+				sampleConfig.System.Role.Sender.DBip 	   = `y.y.y.y`
+				sampleConfig.System.Role.Sender.DBport     = `3306`
+				sampleConfig.System.Role.Sender.DBuser     = `username`
+				sampleConfig.System.Role.Sender.DBpass     = `password`
+				sampleConfig.System.Role.Sender.DBname 	   = `databaseName`
+				sampleConfig.System.Role.Sender.Interval   = `0000s|00m|00h|00d`
 				sampleConfig.System.Role.Receiver.Database = `mysql`
-				sampleConfig.System.Role.Receiver.DBip = `z.z.z.z`
-				sampleConfig.System.Role.Receiver.DBport = `3306`
-				sampleConfig.System.Role.Receiver.DBuser = `username`
-				sampleConfig.System.Role.Receiver.DBpass = `password`
-				sampleConfig.System.Role.Receiver.DBname = `databaseName`
+				sampleConfig.System.Role.Receiver.DBip     = `z.z.z.z`
+				sampleConfig.System.Role.Receiver.DBport   = `3306`
+				sampleConfig.System.Role.Receiver.DBuser   = `username`
+				sampleConfig.System.Role.Receiver.DBpass   = `password`
+				sampleConfig.System.Role.Receiver.DBname   = `databaseName`
 
 				var jsonData []byte
 				jsonData, err = json.MarshalIndent(sampleConfig, "", "    ")
@@ -135,8 +134,7 @@ func main() {
 			}
 
 			// create working directory if it doesn't exist
-			err = os.MkdirAll("/opt/tto/", os.ModePerm)
-			if err != nil {
+			if err := os.MkdirAll("/opt/tto/", os.ModePerm); err != nil {
 				glog.Fatal(err)
 			}
 	}
@@ -145,8 +143,7 @@ func main() {
 
 	// parse config
 	config := config{}
-	err  := config.loadConfig("/etc/tto/" + *configFile)
-	if err != nil {
+	if err  := config.loadConfig("/etc/tto/" + *configFile); err != nil {
 		glog.Exit(err)
 	}
 
@@ -168,32 +165,29 @@ func main() {
 		glog.Info("created file: " + config.System.WorkingDir + ".latest.restore")
 	}
 
-	// chown all files to appropriate user
+	// chown all files to appropriate usr
 
 	// get app uid/gid based on system.conf from conf.json
-	user, err := user.Lookup(config.System.User)
+	usr, err := user.Lookup(config.System.User)
 	if err != nil {
 		glog.Exit(err)
 	}
-	uid, _ := strconv.Atoi(user.Uid)
-	gid, _ := strconv.Atoi(user.Gid)
+	uid, _ := strconv.Atoi(usr.Uid)
+	gid, _ := strconv.Atoi(usr.Gid)
 
-	err = os.Chown("/opt/tto/", uid, gid)
-	if err != nil {
+	if err = os.Chown("/opt/tto/", uid, gid); err != nil {
 		glog.Exit(err)
 	}
 
-	err = os.Chown("/opt/tto/.latest.dump", uid, gid)
-	if err != nil {
+	if err = os.Chown("/opt/tto/.latest.dump", uid, gid); err != nil {
 		glog.Exit(err)
 	}
 
-	err = os.Chown("/opt/tto/.latest.restore", uid, gid)
-	if err != nil {
+	if err = os.Chown("/opt/tto/.latest.restore", uid, gid); err != nil {
 		glog.Exit(err)
 	}
 
-	// TODO: run service as a user! This should be set in the systemd service file
+	// TODO: run service as a usr! This should be set in the systemd service file
 
 	// what is my role
 	daemonRole := config.System.Type
@@ -290,8 +284,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 			// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
 			// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
-			err = watcher.Add(config.System.WorkingDir + ".latest.dump")
-			if err != nil {
+			if err = watcher.Add(config.System.WorkingDir + ".latest.dump"); err != nil {
 				glog.Fatal(err)
 			}
 			var event fsnotify.Event
@@ -357,7 +350,9 @@ func (service *Service) Manage(config config, command *command, role string) (st
 func cliFlags() *string {
 
 	// override glog default logging to stderr so daemon managers can read the logs (docker, systemd)
-	flag.Set("logtostderr", "true")
+	if err := flag.Set("logtostderr", "true"); err != nil {
+		glog.Fatal(err)
+	}
 	// default conf file
 	confFilePtr := flag.String("conf", "conf.json", "name of conf file.")
 
@@ -396,8 +391,7 @@ func (config *config) loadConfig(filename string) error {
 	defer fd.Close()
 
 	jsonParser := json.NewDecoder(fd)
-	err = jsonParser.Decode(&config)
-	if err != nil {
+	if err = jsonParser.Decode(&config); err != nil {
 		return err
 	}
 
@@ -406,8 +400,7 @@ func (config *config) loadConfig(filename string) error {
 
 func Remove(filename string) error {
 
-	err := os.Remove(filename)
-	if err != nil {
+	if err := os.Remove(filename); err != nil {
 		return err
 	}
 
@@ -450,36 +443,31 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 		config.System.Role.Sender.Port,
 		config.System.User,
 		config.System.Pass)
-	err := client.Connect()
-	if err != nil {
+	if err := client.Connect(); err != nil {
 		return "", err
 	}
 
 	// add lock file on remote system for mysql dump
-	err = client.NewSession()
-	if err != nil {
+	if err := client.NewSession(); err != nil {
 		return "", err
 	}
 	defer client.CloseSession()
-	_, err = client.RunCommand("touch " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err := client.RunCommand("touch " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
 	}
 
 	// copy dump to remote system
-	err = client.NewSession()
-	if err != nil {
+	if err = client.NewSession(); err != nil {
 		return "", err
 	}
 	defer client.CloseSession()
-	err = client.CopyFile(mysqlDump, config.System.WorkingDir, "0600")
-	if err != nil {
+	if err = client.CopyFile(mysqlDump, config.System.WorkingDir, "0600"); err != nil {
 		return "", err
 	}
 
 	// remove lock file on remote system for mysql dump
-	err = client.NewSession()
-	if err != nil {
+	if err = client.NewSession(); err != nil {
 		return "", err
 	}
 	defer client.CloseSession()
@@ -489,8 +477,7 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	}
 
 	// add lock file on remote system for .latest.dump
-	err = client.NewSession()
-	if err != nil {
+	if err = client.NewSession(); err != nil {
 		return "", err
 	}
 	defer client.CloseSession()
@@ -500,8 +487,7 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	}
 
 	// update latest dump notes on remote system
-	err = client.NewSession()
-	if err != nil {
+	if err = client.NewSession(); err != nil {
 		return "", err
 	}
 	defer client.CloseSession()
@@ -511,8 +497,7 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	}
 
 	// remove lock file on remote system for .latest.dump
-	err = client.NewSession()
-	if err != nil {
+	if err = client.NewSession(); err != nil {
 		return "", err
 	}
 	defer client.CloseSession()
@@ -522,8 +507,7 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	}
 
 	// delete local dump
-	err = Remove(config.System.WorkingDir + mysqlDump)
-	if err != nil {
+	if err = Remove(config.System.WorkingDir + mysqlDump); err != nil {
 		return "", err
 	}
 
@@ -565,15 +549,19 @@ func (config config) restore() (string, error) {
 	scanner := bufio.NewScanner(dumpFile)
 	scanner.Scan()
 	latestDump := scanner.Text()
-	err = dumpFile.Close()
-	if err != nil {
+	if err = dumpFile.Close(); err != nil {
 		return "", err
 	}
 
 	// delete ~.latest.dump.lock
-	err = os.Remove(config.System.WorkingDir + "~.latest.dump.lock")
-	if err != nil {
+	if err = os.Remove(config.System.WorkingDir + "~.latest.dump.lock"); err != nil {
 		return "", err
+	}
+
+	// ## safety check: latest dump vs configuration database name
+	if strings.Compare(latestDump, config.System.Role.Receiver.DBname) != 0 {
+		// oh shit, someone is dumping one database but trying to restore it into another one
+		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
 
 	// ########### .latest.restore #############
@@ -586,8 +574,7 @@ func (config config) restore() (string, error) {
 	scanner = bufio.NewScanner(restoreFile)
 	scanner.Scan()
 	latestRestore := scanner.Text()
-	err = restoreFile.Close()
-	if err != nil {
+	if err = restoreFile.Close(); err != nil {
 		return "", err
 	}
 
@@ -608,14 +595,12 @@ func (config config) restore() (string, error) {
 		}
 
 		// restore mysqldump into database
-		err = database.Restore(db, config.System.WorkingDir + latestDump)
-		if err != nil {
+		if err = database.Restore(db, config.System.WorkingDir + latestDump); err != nil {
 			return "", err
 		}
 
 		// update .latest.restore with restored dump filename
-		err = ioutil.WriteFile(config.System.WorkingDir + ".latest.restore", []byte(latestDump), 0600)
-		if err != nil {
+		if err = ioutil.WriteFile(config.System.WorkingDir + ".latest.restore", []byte(latestDump), 0600); err != nil {
 			return "", err
 		}
 
