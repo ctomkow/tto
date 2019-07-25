@@ -51,7 +51,7 @@ func Create(db *sql.DB, dbName string) error {
 	return nil
 }
 
-func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (string, error) {
+func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string, workingDir string) (string, error) {
 
 	// YYYYMMDDhhmmss
 	currentTime := time.Now().Format("20060102150405")
@@ -79,7 +79,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 		return "", err
 	}
 
-	err = ioutil.WriteFile(sqlFile, bytes, 0644)
+	err = ioutil.WriteFile(workingDir + sqlFile, bytes, 0644)
 	if err != nil {
 		return "", err
 	}

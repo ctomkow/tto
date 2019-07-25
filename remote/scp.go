@@ -17,9 +17,9 @@ import (
 	"time"
 )
 
-func (sc *SSH) CopyFile(filename string, remotePath string, permissions string) error {
+func (sc *SSH) CopyFile(filename string, workingDir string, permissions string) error {
 
-	fd, err := os.Open(filename)
+	fd, err := os.Open(workingDir + filename)
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (sc *SSH) CopyFile(filename string, remotePath string, permissions string) 
 	}
 	byteReader := bytes.NewReader(contentBytes)
 
-	return sc.copy(byteReader, remotePath + filename, permissions, int64(len(contentBytes)))
+	return sc.copy(byteReader, workingDir + filename, permissions, int64(len(contentBytes)))
 
 }
 
