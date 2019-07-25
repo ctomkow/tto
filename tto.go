@@ -43,6 +43,14 @@ type config struct {
 	}
 }
 
+type command struct {
+	install bool
+	remove  bool
+	start   bool
+	stop    bool
+	status  bool
+}
+
 // Service has embedded daemon
 type Service struct {
 	daemon.Daemon
@@ -59,6 +67,60 @@ func main() {
 
 	// parse cli flags
 	configFile := cliFlags()
+
+	// parse cli commands
+	command := command{}
+	command.cliCommands()
+
+	// if service is being installed, create sample conf file; /etc/tto/conf.json if it doesn't exist
+	switch {
+		case command.install:
+
+			// create config directory
+			err := os.MkdirAll("/etc/tto/", os.ModePerm)
+			if err != nil {
+				glog.Fatal(err)
+			}
+
+			// if sample conf.json doesn't exist, create it
+			if !fileExists("/etc/tto/conf.json") {
+				fd, err := os.Create("/etc/tto/conf.json")
+				if err != nil {
+					glog.Exit(err)
+				}
+				defer fd.Close()
+
+				sampleConfig := &config{}
+
+				sampleConfig.System.Role = `[sender|receiver]`
+				sampleConfig.System.Dest = `x.x.x.x`
+				sampleConfig.System.Port = `22`
+				sampleConfig.System.User = `username`
+				sampleConfig.System.Pass = `password`
+				sampleConfig.System.WorkingDir = `/opt/tto/`
+				sampleConfig.System.Replicate.Mysql = `[true|false]`
+				sampleConfig.System.Replicate.Interval = `[0000s|00m|00h|00d]`
+				sampleConfig.Mysql.DBip = `y.y.y.y`
+				sampleConfig.Mysql.DBport = `3306`
+				sampleConfig.Mysql.DBuser = `username`
+				sampleConfig.Mysql.DBpass = `password`
+				sampleConfig.Mysql.DBname = `databaseName`
+
+				var jsonData []byte
+				jsonData, err = json.MarshalIndent(sampleConfig, "", "    ")
+				if err != nil {
+					glog.Error(err)
+				}
+
+				_, err = fd.WriteString(string(jsonData))
+				if err != nil {
+					glog.Error(err)
+				}
+				glog.Info("created file: /etc/tto/conf.json")
+			}
+	}
+
+	// TODO: if conf.json is deleted, `tto remove` fails
 
 	// parse config
 	config := config{}
@@ -91,7 +153,7 @@ func main() {
 	}
 
 	service := &Service{srv, false}
-	status, err := service.Manage(config)
+	status, err := service.Manage(config, &command)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -100,36 +162,25 @@ func main() {
 }
 
 // Manage by daemon commands or run the daemon
-func (service *Service) Manage(config config) (string, error) {
+func (service *Service) Manage(config config, command *command) (string, error) {
 
 	usage := "Usage: tto install | remove | start | stop | status"
 
-	// if received any kind of command, do it
-	if len(os.Args) > 1 {
-		command := os.Args[1]
-		switch command {
-		case "install":
+	if command.install {
+		return service.Install()
 
-			// create config directory
-			err := os.MkdirAll("/etc/tto", os.ModePerm)
-			if err != nil {
-				glog.Fatal(err)
-			}
+	} else if command.remove {
+		return service.Remove()
 
-			// TODO: write sample conf.json to directory based on struct
+	} else if command.start {
+		return service.Start()
 
-			return service.Install()
-		case "remove":
-			return service.Remove()
-		case "start":
-			return service.Start()
-		case "stop":
-			return service.Stop()
-		case "status":
-			return service.Status()
-		default:
-			return usage, nil
-		}
+	} else if command.stop {
+		return service.Stop()
+
+	} else if command.status {
+		return service.Status()
+
 	}
 
 	// a ticker every config.System.Replicate.Interval Used by the sender
@@ -224,6 +275,26 @@ func cliFlags() *string {
 
 	flag.Parse()
 	return confFilePtr
+}
+
+func (command *command) cliCommands() {
+
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		switch cmd {
+			case "install":
+				command.install = true
+			case "remove":
+				command.remove = true
+			case "start":
+				command.start = true
+			case "stop":
+				command.stop = true
+			case "status":
+				command.status = true
+		}
+	}
+
 }
 
 func (config *config) loadConfig(filename string) error {
