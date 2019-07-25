@@ -104,7 +104,7 @@ func main() {
 				sampleConfig.System.User = `username`
 				sampleConfig.System.Pass = `password`
 				sampleConfig.System.WorkingDir = `/opt/tto/`
-				sampleConfig.System.Type = `[sender|receiver]`
+				sampleConfig.System.Type = `sender|receiver`
 				sampleConfig.System.Role.Sender.Dest = `x.x.x.x`
 				sampleConfig.System.Role.Sender.Port = `22`
 				sampleConfig.System.Role.Sender.Database = `mysql`
@@ -113,7 +113,8 @@ func main() {
 				sampleConfig.System.Role.Sender.DBuser = `username`
 				sampleConfig.System.Role.Sender.DBpass = `password`
 				sampleConfig.System.Role.Sender.DBname = `databaseName`
-				sampleConfig.System.Role.Sender.Interval = `[0000s|00m|00h|00d]`
+				sampleConfig.System.Role.Sender.Interval = `0000s|00m|00h|00d`
+				sampleConfig.System.Role.Receiver.Database = `mysql`
 				sampleConfig.System.Role.Receiver.DBip = `z.z.z.z`
 				sampleConfig.System.Role.Receiver.DBport = `3306`
 				sampleConfig.System.Role.Receiver.DBuser = `username`
@@ -194,6 +195,9 @@ func main() {
 
 	// TODO: run service as a user! This should be set in the systemd service file
 
+	// what is my role
+	daemonRole := config.System.Type
+
 	// daemon setup and service start
 	srv, err := daemon.New(name, description)
 	if err != nil {
@@ -201,7 +205,7 @@ func main() {
 	}
 
 	service := &Service{srv, false}
-	status, err := service.Manage(config, &command)
+	status, err := service.Manage(config, &command, daemonRole)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -210,7 +214,7 @@ func main() {
 }
 
 // Manage by daemon commands or run the daemon
-func (service *Service) Manage(config config, command *command) (string, error) {
+func (service *Service) Manage(config config, command *command, role string) (string, error) {
 
 	usage := "Usage: tto install | remove | start | stop | status"
 
@@ -231,46 +235,28 @@ func (service *Service) Manage(config config, command *command) (string, error) 
 
 	}
 
-	// a ticker every config.System.Role.Sender.Interval Used by the sender
-	interval, err := time.ParseDuration(config.System.Role.Sender.Interval)
-	if err != nil {
-		glog.Fatal(err)
-	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	// a file watcher monitoring .latest.dump used by the receiver
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		glog.Fatal(err)
-	}
-	defer watcher.Close()
-
-	// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
-	// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
-	err = watcher.Add(config.System.WorkingDir + ".latest.dump")
-	if err != nil {
-		glog.Fatal(err)
-	}
-
 	// Set up channel on which to send signal notifications.
 	// We must use a buffered channel or risk missing the signal
 	// if we're not ready to receive when the signal is sent.
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
-	// define event variable
-	var event fsnotify.Event
+	switch role {
+		case "sender":
 
-	// daemon work cycle for sender and receiver or interrupt by system signal
-	// TODO: refactor this so receiver doesn't run a ticker and sender doesn't watch
-	for {
-		select {
+			// a ticker every Interval specified by user
+			interval, err := time.ParseDuration(config.System.Role.Sender.Interval)
+			if err != nil {
+				glog.Fatal(err)
+			}
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
 
-				// for sender, trigger on ticker interval value
-			case timer := <-ticker.C:
-				if strings.Compare(config.System.Type, "sender") == 0 {
-					glog.Info("ticker interval " + timer.String())
+			for {
+				select {
+
+				// trigger on ticker
+				case <-ticker.C:
 					mysqlDump, err := config.dumpDatabase()
 					if err != nil {
 						glog.Error(err)
@@ -281,37 +267,86 @@ func (service *Service) Manage(config config, command *command) (string, error) 
 						}
 						glog.Info(errors.New("dumped and copied over database: " + copiedDump))
 					}
-				}
-
-				// for receiver, trigger on event from watching .latest.dump
-				// TODO: config.restore() should be called as a goroutine, so it doesn't block, but still have a service.restoreLock while doing it's thing
-			case event = <-watcher.Events:
-				if strings.Compare(config.System.Type, "receiver") == 0 {
-					if triggerOnEvent(event) {
-						if !service.restoreLock {
-							service.restoreLock = true
-							restoredDump, err := config.restore()
-							if err != nil {
-								glog.Error(err)
-							}
-							service.restoreLock = false
-							glog.Info(errors.New("restored database: " + restoredDump))
-						} // else, silently skip and don't attempt to restore database as it's currently in progress
-						// this also handles any double firing of watched WRITE events, that some editors create
-					}
-				}
-				// TODO: add a mysqlDump cleanup buffer, holding X number of backups.
 
 				// trigger on signal
-			case killSignal := <-interrupt:
-				glog.Error(killSignal)
+				case killSignal := <-interrupt:
+					glog.Error(killSignal)
 
-				if killSignal == os.Interrupt {
-					return "", errors.New("daemon was interrupted by system signal")
+					if killSignal == os.Interrupt {
+						return "", errors.New("daemon was interrupted by system signal")
+					}
+					return "", errors.New("daemon was killed")
 				}
-				return "", errors.New("daemon was killed")
+			}
 
-		}
+		case "receiver":
+
+			// a file watcher monitoring .latest.dump used by the receiver
+			watcher, err := fsnotify.NewWatcher()
+			if err != nil {
+				glog.Fatal(err)
+			}
+			defer watcher.Close()
+
+			// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
+			// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
+			err = watcher.Add(config.System.WorkingDir + ".latest.dump")
+			if err != nil {
+				glog.Fatal(err)
+			}
+			var event fsnotify.Event
+
+			// create channel for communicating with the database restore routine
+			restoreChan :=  make(chan string)
+
+			for {
+				select {
+
+				// trigger on write event
+				case event = <-watcher.Events:
+					if triggerOnEvent(event) {
+						if !service.restoreLock {
+
+							service.restoreLock = true
+
+							// run restore as a goroutine. goroutine holds a restore lock until it's done
+							go func() {
+								restoredDump, err := config.restore()
+								if err != nil {
+									glog.Error(err)
+									restoreChan <- ""
+								}
+								restoreChan <- restoredDump
+							}()
+
+						} // else, silently skip and don't attempt to restore database as it's currently in progress
+					}
+
+					// TODO: add a mysqlDump cleanup buffer, holding X number of backups.
+
+				// trigger on dump restore being finished
+				case restoredDump := <-restoreChan:
+					service.restoreLock = false
+					if restoredDump == "" {
+						glog.Error(errors.New("failed to restore database"))
+					} else {
+						glog.Info(errors.New("restored database: " + restoredDump))
+					}
+
+				// trigger on signal
+				case killSignal := <-interrupt:
+					glog.Error(killSignal)
+
+					if killSignal == os.Interrupt {
+						return "", errors.New("daemon was interrupted by system signal")
+					}
+					return "", errors.New("daemon was killed")
+
+				}
+			}
+
+		default:
+			return "", errors.New("could not start daemon! unknown type: " + role)
 	}
 
 	return usage, nil
