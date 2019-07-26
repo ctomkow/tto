@@ -467,11 +467,6 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err := client.NewSession(); err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := client.CloseSession(); err != nil {
-			glog.Error(err)
-		}
-	}()
 	_, err := client.RunCommand("touch " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
@@ -481,11 +476,6 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := client.CloseSession(); err != nil {
-			glog.Error(err)
-		}
-	}()
 	if err = client.CopyFile(mysqlDump, config.System.WorkingDir, "0600"); err != nil {
 		return "", err
 	}
@@ -494,11 +484,6 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := client.CloseSession(); err != nil {
-			glog.Error(err)
-		}
-	}()
 	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
@@ -508,11 +493,6 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := client.CloseSession(); err != nil {
-			glog.Error(err)
-		}
-	}()
 	_, err = client.RunCommand("touch " + config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
@@ -522,11 +502,6 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := client.CloseSession(); err != nil {
-			glog.Error(err)
-		}
-	}()
 	_, err = client.RunCommand("echo " + mysqlDump + " > " + config.System.WorkingDir + ".latest.dump")
 	if err != nil {
 		return "", err
@@ -536,11 +511,6 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := client.CloseSession(); err != nil {
-			glog.Error(err)
-		}
-	}()
 	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
@@ -599,7 +569,7 @@ func (config config) restore() (string, error) {
 	}
 
 	// ## safety check: latest dump vs configuration database name
-	if strings.Compare(latestDump, config.System.Role.Receiver.DBname) != 0 {
+	if strings.Compare(strings.Split(latestDump, "-")[0], config.System.Role.Receiver.DBname) != 0 {
 		// oh shit, someone is dumping one database but trying to restore it into another one
 		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
