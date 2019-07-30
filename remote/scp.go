@@ -33,8 +33,7 @@ func (sc *SSH) CopyFile(filename string, workingDir string, permissions string) 
 	}
 	byteReader := bytes.NewReader(contentBytes)
 
-	return sc.copy(byteReader, workingDir + filename, permissions, int64(len(contentBytes)))
-
+	return sc.copy(byteReader, workingDir+filename, permissions, int64(len(contentBytes)))
 }
 
 // ##### private methods #####
@@ -102,6 +101,7 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 			return err
 		}
 	}
+
 	return nil
 }
 

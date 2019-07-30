@@ -21,7 +21,7 @@ import (
 func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (*sql.DB, error) {
 
 	// prep DB connection
-	db, err := sql.Open("mysql", dbUser + ":" + dbPass + "@tcp(" + dbIp + ":" + dbPort + ")/" + dbName)
+	db, err := sql.Open("mysql", dbUser+":"+dbPass+"@tcp("+dbIp+":"+dbPort+")/"+dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 	currentTime := time.Now().Format("20060102150405")
 
 	portArg := "-P" + dbPort
-	ipArg   := "-h" + dbIp
+	ipArg := "-h" + dbIp
 	userArg := "-u" + dbUser
 	passArg := "-p" + dbPass
 	sqlFile := dbName + "-" + currentTime + ".sql"
@@ -65,7 +65,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 		return "", err
 	}
 
-	if err = ioutil.WriteFile(workingDir + sqlFile, bytes, 0644); err != nil {
+	if err = ioutil.WriteFile(workingDir+sqlFile, bytes, 0644); err != nil {
 		return "", err
 	}
 

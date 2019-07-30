@@ -12,11 +12,11 @@ import (
 type SSH struct {
 	remoteHostName string
 	remoteHostPort string
-	user string
-	pass string
-	config *ssh.ClientConfig
-	session *ssh.Session
-	connection *ssh.Client
+	user           string
+	pass           string
+	config         *ssh.ClientConfig
+	session        *ssh.Session
+	connection     *ssh.Client
 }
 
 // ##### public functions #####
@@ -42,7 +42,7 @@ func ConnPrep(ip string, port string, user string, pass string) *SSH {
 }
 
 func (sc *SSH) Connect() error {
-	client, err := ssh.Dial("tcp", sc.remoteHostName + ":" + sc.remoteHostPort, sc.config)
+	client, err := ssh.Dial("tcp", sc.remoteHostName+":"+sc.remoteHostPort, sc.config)
 	if err != nil {
 		return err
 	}

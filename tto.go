@@ -10,6 +10,7 @@ import (
 	"flag"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
+	"github.com/robfig/cron"
 	"github.com/takama/daemon"
 	"io/ioutil"
 	"os"
@@ -41,7 +42,7 @@ type config struct {
 				DBuser   string `json:"db_user"`
 				DBpass   string `json:"db_pass"`
 				DBname   string `json:"db_name"`
-				Interval string `json:"interval"`
+				Cron     string `json:"cron"`
 			}
 			Receiver struct {
 				Database string `json:"database"`
@@ -132,71 +133,71 @@ func main() {
 
 	// if service is being installed, create sample conf file; /etc/tto/conf.json if it doesn't exist
 	switch {
-		case command.install:
+	case command.install:
 
-			// create config directory if it doesn't exist
-			if err := os.MkdirAll("/etc/tto/", os.ModePerm); err != nil {
-				glog.Fatal(err)
+		// create config directory if it doesn't exist
+		if err := os.MkdirAll("/etc/tto/", os.ModePerm); err != nil {
+			glog.Fatal(err)
+		}
+
+		// if sample conf.json doesn't exist, create it
+		if !fileExists("/etc/tto/conf.json") {
+			fd, err := os.Create("/etc/tto/conf.json")
+			if err != nil {
+				glog.Exit(err)
 			}
-
-			// if sample conf.json doesn't exist, create it
-			if !fileExists("/etc/tto/conf.json") {
-				fd, err := os.Create("/etc/tto/conf.json")
-				if err != nil {
+			defer func() {
+				if err := fd.Close(); err != nil {
 					glog.Exit(err)
 				}
-				defer func() {
-					if err := fd.Close(); err != nil {
-						glog.Exit(err)
-					}
-				}()
+			}()
 
-				sampleConfig := &config{}
+			sampleConfig := &config{}
 
-				sampleConfig.System.User 				   = `username`
-				sampleConfig.System.Pass 				   = `password`
-				sampleConfig.System.WorkingDir 		  	   = `/opt/tto/`
-				sampleConfig.System.Type 				   = `sender|receiver`
-				sampleConfig.System.Role.Sender.Dest 	   = `x.x.x.x`
-				sampleConfig.System.Role.Sender.Port 	   = `22`
-				sampleConfig.System.Role.Sender.Database   = `mysql`
-				sampleConfig.System.Role.Sender.DBip 	   = `y.y.y.y`
-				sampleConfig.System.Role.Sender.DBport     = `3306`
-				sampleConfig.System.Role.Sender.DBuser     = `username`
-				sampleConfig.System.Role.Sender.DBpass     = `password`
-				sampleConfig.System.Role.Sender.DBname 	   = `databaseName`
-				sampleConfig.System.Role.Sender.Interval   = `0000s|00m|00h|00d`
-				sampleConfig.System.Role.Receiver.Database = `mysql`
-				sampleConfig.System.Role.Receiver.DBip     = `z.z.z.z`
-				sampleConfig.System.Role.Receiver.DBport   = `3306`
-				sampleConfig.System.Role.Receiver.DBuser   = `username`
-				sampleConfig.System.Role.Receiver.DBpass   = `password`
-				sampleConfig.System.Role.Receiver.DBname   = `databaseName`
+			sampleConfig.System.User = `username`
+			sampleConfig.System.Pass = `password`
+			sampleConfig.System.WorkingDir = `/opt/tto/`
+			sampleConfig.System.Type = `sender|receiver`
+			sampleConfig.System.Role.Sender.Dest = `x.x.x.x`
+			sampleConfig.System.Role.Sender.Port = `22`
+			sampleConfig.System.Role.Sender.Database = `mysql`
+			sampleConfig.System.Role.Sender.DBip = `y.y.y.y`
+			sampleConfig.System.Role.Sender.DBport = `3306`
+			sampleConfig.System.Role.Sender.DBuser = `username`
+			sampleConfig.System.Role.Sender.DBpass = `password`
+			sampleConfig.System.Role.Sender.DBname = `databaseName`
+			sampleConfig.System.Role.Sender.Cron = `a cron statement`
+			sampleConfig.System.Role.Receiver.Database = `mysql`
+			sampleConfig.System.Role.Receiver.DBip = `z.z.z.z`
+			sampleConfig.System.Role.Receiver.DBport = `3306`
+			sampleConfig.System.Role.Receiver.DBuser = `username`
+			sampleConfig.System.Role.Receiver.DBpass = `password`
+			sampleConfig.System.Role.Receiver.DBname = `databaseName`
 
-				var jsonData []byte
-				jsonData, err = json.MarshalIndent(sampleConfig, "", "    ")
-				if err != nil {
-					glog.Error(err)
-				}
-
-				_, err = fd.WriteString(string(jsonData))
-				if err != nil {
-					glog.Error(err)
-				}
-				glog.Info("created file: /etc/tto/conf.json")
+			var jsonData []byte
+			jsonData, err = json.MarshalIndent(sampleConfig, "", "    ")
+			if err != nil {
+				glog.Error(err)
 			}
 
-			// create working directory if it doesn't exist
-			if err := os.MkdirAll("/opt/tto/", os.ModePerm); err != nil {
-				glog.Fatal(err)
+			_, err = fd.WriteString(string(jsonData))
+			if err != nil {
+				glog.Error(err)
 			}
+			glog.Info("created file: /etc/tto/conf.json")
+		}
+
+		// create working directory if it doesn't exist
+		if err := os.MkdirAll("/opt/tto/", os.ModePerm); err != nil {
+			glog.Fatal(err)
+		}
 	}
 
 	// TODO: if conf.json is deleted, `tto remove` fails
 
 	// parse config
 	config := config{}
-	if err  := config.loadConfig("/etc/tto/" + *configFile); err != nil {
+	if err := config.loadConfig("/etc/tto/" + *configFile); err != nil {
 		glog.Exit(err)
 	}
 
@@ -290,115 +291,114 @@ func (service *Service) Manage(config config, command *command, role string) (st
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 	switch role {
-		case "sender":
+	case "sender":
 
-			// a ticker every Interval specified by user
-			interval, err := time.ParseDuration(config.System.Role.Sender.Interval)
-			if err != nil {
-				glog.Fatal(err)
-			}
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
+		cronChannel := make(chan bool)
+		cj := cron.New()
+		err := cj.AddFunc(config.System.Role.Sender.Cron, func() { cronTriggered(cronChannel) })
+		if err != nil {
+			glog.Fatal(err)
+		}
+		cj.Start()
 
-			for {
-				select {
+		for {
+			select {
 
-				// trigger on ticker
-				case <-ticker.C:
-					mysqlDump, err := config.dumpDatabase()
+			// trigger on ticker
+			case <-cronChannel:
+				mysqlDump, err := config.dumpDatabase()
+				if err != nil {
+					glog.Error(err)
+				} else {
+					copiedDump, err := config.transferDump(mysqlDump)
 					if err != nil {
 						glog.Error(err)
-					} else {
-						copiedDump, err := config.transferDump(mysqlDump)
-						if err != nil {
-							glog.Error(err)
-						}
-						glog.Info(errors.New("dumped and copied over database: " + copiedDump))
 					}
-
-
-				// trigger on signal
-				case killSignal := <-interrupt:
-					glog.Error(killSignal)
-
-					if killSignal == os.Interrupt {
-						return "", errors.New("daemon was interrupted by system signal")
-					}
-					return "", errors.New("daemon was killed")
+					glog.Info(errors.New("dumped and copied over database: " + copiedDump))
 				}
-			}
 
-		case "receiver":
+			// trigger on signal
+			case killSignal := <-interrupt:
+				glog.Error(killSignal)
 
-			// a file watcher monitoring .latest.dump used by the receiver
-			watcher, err := fsnotify.NewWatcher()
-			if err != nil {
-				glog.Fatal(err)
-			}
-			defer func() {
-				if err := watcher.Close(); err != nil {
-					glog.Exit(err)
+				if killSignal == os.Interrupt {
+					return "", errors.New("daemon was interrupted by system signal")
 				}
-			}()
-
-			// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
-			// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
-			if err = watcher.Add(config.System.WorkingDir + ".latest.dump"); err != nil {
-				glog.Fatal(err)
+				return "", errors.New("daemon was killed")
 			}
-			var event fsnotify.Event
+		}
 
-			// create channel for communicating with the database restore routine
-			restoreChan :=  make(chan string)
+	case "receiver":
 
-			for {
-				select {
+		// a file watcher monitoring .latest.dump used by the receiver
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			glog.Fatal(err)
+		}
+		defer func() {
+			if err := watcher.Close(); err != nil {
+				glog.Exit(err)
+			}
+		}()
 
-				// trigger on write event
-				case event = <-watcher.Events:
-					if isWriteEvent(event) {
-						if !service.restoreLock {
+		// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
+		// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
+		if err = watcher.Add(config.System.WorkingDir + ".latest.dump"); err != nil {
+			glog.Fatal(err)
+		}
+		var event fsnotify.Event
 
-							service.restoreLock = true
+		// create channel for communicating with the database restore routine
+		restoreChan := make(chan string)
 
-							// run restore as a goroutine. goroutine holds a restore lock until it's done
-							go func() {
-								restoredDump, err := config.restore()
-								if err != nil {
-									glog.Error(err)
-									restoreChan <- ""
-								}
-								restoreChan <- restoredDump
-							}()
+		for {
+			select {
 
-						} // else, silently skip and don't attempt to restore database as it's currently in progress
-					}
+			// trigger on write event
+			case event = <-watcher.Events:
+				if isWriteEvent(event) {
+					if !service.restoreLock {
 
-					// TODO: add a mysqlDump cleanup buffer, holding X number of backups.
+						service.restoreLock = true
 
-				// trigger on dump restore being finished
-				case restoredDump := <-restoreChan:
-					service.restoreLock = false
-					if restoredDump == "" {
-						glog.Error(errors.New("failed to restore database"))
-					} else {
-						glog.Info(errors.New("restored database: " + restoredDump))
-					}
+						// run restore as a goroutine. goroutine holds a restore lock until it's done
+						go func() {
+							restoredDump, err := config.restore()
+							if err != nil {
+								glog.Error(err)
+								restoreChan <- ""
+							}
+							restoreChan <- restoredDump
+						}()
 
-				// trigger on signal
-				case killSignal := <-interrupt:
-					glog.Error(killSignal)
-
-					if killSignal == os.Interrupt {
-						return "", errors.New("daemon was interrupted by system signal")
-					}
-					return "", errors.New("daemon was killed")
-
+					} // else, silently skip and don't attempt to restore database as it's currently in progress
 				}
-			}
 
-		default:
-			return "", errors.New("could not start daemon! unknown type: " + role)
+				// TODO: add a mysqlDump cleanup buffer, holding X number of backups.
+
+			// trigger on dump restore being finished
+			case restoredDump := <-restoreChan:
+				service.restoreLock = false
+				if restoredDump == "" {
+					glog.Error(errors.New("failed to restore database"))
+				} else {
+					glog.Info(errors.New("restored database: " + restoredDump))
+				}
+
+			// trigger on signal
+			case killSignal := <-interrupt:
+				glog.Error(killSignal)
+
+				if killSignal == os.Interrupt {
+					return "", errors.New("daemon was interrupted by system signal")
+				}
+				return "", errors.New("daemon was killed")
+
+			}
+		}
+
+	default:
+		return "", errors.New("could not start daemon! unknown type: " + role)
 	}
 
 	return usage, nil
@@ -419,6 +419,13 @@ func cliFlags() *string {
 
 	flag.Parse()
 	return confFilePtr
+}
+
+// ## cron helpers ##
+
+func cronTriggered(c chan bool) {
+
+	c <- true
 }
 
 // ## event helpers ##
@@ -605,12 +612,12 @@ func (config config) restore() (string, error) {
 		}
 
 		// restore mysqldump into database
-		if err = database.Restore(db, config.System.WorkingDir + latestDump); err != nil {
+		if err = database.Restore(db, config.System.WorkingDir+latestDump); err != nil {
 			return "", err
 		}
 
 		// update .latest.restore with restored dump filename
-		if err = ioutil.WriteFile(config.System.WorkingDir + ".latest.restore", []byte(latestDump), 0600); err != nil {
+		if err = ioutil.WriteFile(config.System.WorkingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
 			return "", err
 		}
 
