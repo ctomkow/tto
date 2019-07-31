@@ -410,8 +410,6 @@ func (service *Service) Manage(config config, command *command, role string) (st
 					} // else, silently skip and don't attempt to restoreDatabase database as it's currently in progress
 				}
 
-				// TODO: add a mysqlDump cleanup buffer, holding X number of backups.
-
 			// trigger on dump restoreDatabase being finished
 			case restoredDump := <-restoreChan:
 				service.restoreLock = false
