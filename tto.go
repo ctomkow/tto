@@ -349,6 +349,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 						if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, []time.Time{dumpToBeDeleted}); err != nil {
 							glog.Error(err)
 						}
+						glog.Info(errors.New("deleted old database dump: " + compileFilename(config.System.Role.Sender.DBname, dumpToBeDeleted)))
 					}
 				}
 
