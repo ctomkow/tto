@@ -1,7 +1,7 @@
 // Craig Tomkow
 // July 30, 2019
 
-package ringbuffer
+package buffer
 
 import (
 	"bufio"

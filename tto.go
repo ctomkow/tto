@@ -10,7 +10,7 @@ import (
 	"flag"
 	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/remote"
-	"github.com/ctomkow/tto/ringbuffer"
+	"github.com/ctomkow/tto/buffer"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
@@ -303,13 +303,13 @@ func (service *Service) Manage(config config, command *command, role string) (st
 		}
 
 		// init ring buffer with existing files
-		var rBuff ringbuffer.RingBuffer
-		sortedTimeSlice := ringbuffer.Parse(remoteFiles)
+		var buff buffer.CircularQueue
+		sortedTimeSlice := buffer.Parse(remoteFiles)
 		numOfBackups, err := strconv.Atoi(config.System.Role.Sender.MaxBackups)
 		if err != nil {
 			glog.Fatal(err)
 		}
-		timesSliceToDelete := rBuff.Initialize(numOfBackups, config.System.Role.Sender.DBname, sortedTimeSlice)
+		timesSliceToDelete := buff.Make(numOfBackups, config.System.Role.Sender.DBname, sortedTimeSlice)
 		glog.Info(errors.New("ring buffer filled up to max_backups with existing database dumps"))
 
 		// delete any remote files that don't fit into ring buffer
@@ -344,7 +344,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 					glog.Info(errors.New("dumped and copied over database: " + copiedDump))
 
 					// add to ring buffer and delete any overwritten file
-					dumpToBeDeleted := rBuff.Add(config.System.Role.Sender.DBname, ringbuffer.Parse(mysqlDump)[0])
+					dumpToBeDeleted := buff.Enqueue(config.System.Role.Sender.DBname, buffer.Parse(mysqlDump)[0])
 					if !dumpToBeDeleted.IsZero() {
 						if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, []time.Time{dumpToBeDeleted}); err != nil {
 							glog.Error(err)
