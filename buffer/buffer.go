@@ -32,10 +32,10 @@ func (cq *CircularQueue) Make(size int, dbName string, dataToPopulate []time.Tim
 	var bufferOverflow []time.Time
 
 	for _, elem := range dataToPopulate {
-		deleteItem := cq.Enqueue(dbName, elem)
+		bufferOverwrite := cq.Enqueue(dbName, elem)
 
-		if !deleteItem.IsZero() {
-			bufferOverflow = append(bufferOverflow, deleteItem)
+		if !bufferOverwrite.IsZero() {
+			bufferOverflow = append(bufferOverflow, bufferOverwrite)
 		}
 	}
 
