@@ -11,18 +11,18 @@ deployment where replication was not possible.
 * Enable a simple primary/secondary infrastructure across two data centers
 
 
-###Build Dependencies
+### Build Dependencies
 * "github.com/fsnotify/fsnotify"
 * "github.com/golang/glog"
 * "github.com/robfig/cron"
 * "github.com/takama/daemon"
 * "github.com/go-sql-driver/mysql"
 
-###Runtime Dependencies
+### Runtime Dependencies
 * mysqldump
 * InnoDB tables
 
-##Install (on both systems)
+## Install (on both systems)
 
 go build tto.go
 
@@ -32,7 +32,7 @@ sudo ./tto install
 
 sudo systemctl start tto
 
-##Uninstall
+## Uninstall
 sudo ./tto remove
 
 rm -r /opt/tto/
