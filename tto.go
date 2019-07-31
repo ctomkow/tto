@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/remote"
+	"github.com/ctomkow/tto/ringbuffer"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
@@ -20,9 +23,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"tto/database"
-	"tto/remote"
-	"tto/ringbuffer"
 )
 
 // ##### structs #####
@@ -35,15 +35,15 @@ type config struct {
 		Type       string `json:"type"`
 		Role       struct {
 			Sender struct {
-				Dest     string `json:"dest"`
-				Port     string `json:"port"`
-				Database string `json:"database"`
-				DBip     string `json:"db_ip"`
-				DBport   string `json:"db_port"`
-				DBuser   string `json:"db_user"`
-				DBpass   string `json:"db_pass"`
-				DBname   string `json:"db_name"`
-				Cron     string `json:"cron"`
+				Dest       string `json:"dest"`
+				Port       string `json:"port"`
+				Database   string `json:"database"`
+				DBip       string `json:"db_ip"`
+				DBport     string `json:"db_port"`
+				DBuser     string `json:"db_user"`
+				DBpass     string `json:"db_pass"`
+				DBname     string `json:"db_name"`
+				Cron       string `json:"cron"`
 				MaxBackups string `json:"max_backups"`
 			}
 			Receiver struct {

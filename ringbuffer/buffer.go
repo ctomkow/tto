@@ -17,7 +17,7 @@ type RingBuffer struct {
 	// It has an artificial buffer limit size of 31, regardless of user specified buffer size
 	//   used as a safeguard to ensure the app doesn't run away with backups filling up the system
 	ring [31]struct {
-		name string
+		name      string
 		timestamp time.Time
 	}
 
@@ -68,13 +68,13 @@ func (rb *RingBuffer) Add(dbName string, fileTimestamp time.Time) time.Time {
 
 func (rb *RingBuffer) updateHead() {
 
-	rb.head = mod(rb.head + 1, rb.size)
+	rb.head = mod(rb.head+1, rb.size)
 }
 
 func (rb *RingBuffer) updateTail() {
 
 	if (rb.tail + 1) == rb.size {
-		rb.tail = mod(rb.tail + 1, rb.size)
+		rb.tail = mod(rb.tail+1, rb.size)
 	} else if rb.head == rb.tail {
 		rb.tail++
 	}
@@ -92,5 +92,3 @@ func mod(a, b int) int {
 
 	return m
 }
-
-
