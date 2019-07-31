@@ -1,7 +1,40 @@
 # tto
 3-2-1 MySQL backup and sync
 
-A client-server app for sync'ing a MySQL database from a primary to a secondary.
-It depends on mysqldump installed on the machine with tto running.
+An asynchronous client-server app for synchronizing a MySQL database between two systems. The
+main use-case for developing this was to help maintain a hybrid primary / [primary / secondary] application 
+deployment where replication was not possible.
 
-More details coming.
+### Use Cases
+* Replace cron scheduled shell scripts
+* Don't want to/can't setup MySQL replication
+* Enable a simple primary/secondary infrastructure across two data centers
+
+
+###Build Dependencies
+* "github.com/fsnotify/fsnotify"
+* "github.com/golang/glog"
+* "github.com/robfig/cron"
+* "github.com/takama/daemon"
+* "github.com/go-sql-driver/mysql"
+
+###Runtime Dependencies
+* mysqldump
+* InnoDB tables
+
+##Install (on both systems)
+
+go build tto.go
+
+sudo ./tto install
+
+(edit /etc/conf.json)
+
+sudo systemctl start tto
+
+##Uninstall
+sudo ./tto remove
+
+rm -r /opt/tto/
+
+rm -r /etc/tto/
