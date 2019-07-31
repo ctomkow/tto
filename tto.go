@@ -214,12 +214,12 @@ func main() {
 	}
 
 	// ensure working directory files exists
-	if !fileExists(config.System.WorkingDir + ".latest.restoreDatabase") {
-		_, err := os.Create(config.System.WorkingDir + ".latest.restoreDatabase")
+	if !fileExists(config.System.WorkingDir + ".latest.restore") {
+		_, err := os.Create(config.System.WorkingDir + ".latest.restore")
 		if err != nil {
 			glog.Exit(err)
 		}
-		glog.Info("created file: " + config.System.WorkingDir + ".latest.restoreDatabase")
+		glog.Info("created file: " + config.System.WorkingDir + ".latest.restore")
 	}
 
 	// chown all files to appropriate usr
@@ -240,11 +240,11 @@ func main() {
 		glog.Exit(err)
 	}
 
-	if err = os.Chown("/opt/tto/.latest.restoreDatabase", uid, gid); err != nil {
+	if err = os.Chown("/opt/tto/.latest.restore", uid, gid); err != nil {
 		glog.Exit(err)
 	}
 
-	// TODO: run service as a user! This should be set in the systemd service file
+	// TODO: run service as a user. The daemon package should set this in the systemd file!
 
 	// what is my role
 	daemonRole := config.System.Type
@@ -511,10 +511,10 @@ func (config config) restoreDatabase() (string, error) {
 		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
 
-	// ## .latest.restoreDatabase actions
+	// ## .latest.restore actions
 
-	// open .latest.restoreDatabase and read first line
-	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restoreDatabase")
+	// open .latest.restore and read first line
+	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restore")
 	if err != nil {
 		return "", err
 	}
@@ -546,15 +546,15 @@ func (config config) restoreDatabase() (string, error) {
 			return "", err
 		}
 
-		// update .latest.restoreDatabase with restored dump filename
-		if err = ioutil.WriteFile(config.System.WorkingDir+".latest.restoreDatabase", []byte(latestDump), 0600); err != nil {
+		// update .latest.restore with restored dump filename
+		if err = ioutil.WriteFile(config.System.WorkingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
 			return "", err
 		}
 
 		return latestDump, nil
 	}
 
-	return "", errors.New(".latest.dump and .latest.restoreDatabase are the same")
+	return "", errors.New(".latest.dump and .latest.restore are the same")
 }
 
 // ## remote system helpers ##
