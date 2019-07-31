@@ -22,6 +22,7 @@ import (
 	"time"
 	"tto/database"
 	"tto/remote"
+	"tto/ringbuffer"
 )
 
 // ##### structs #####
@@ -43,6 +44,7 @@ type config struct {
 				DBpass   string `json:"db_pass"`
 				DBname   string `json:"db_name"`
 				Cron     string `json:"cron"`
+				MaxBackups string `json:"max_backups"`
 			}
 			Receiver struct {
 				Database string `json:"database"`
@@ -167,6 +169,7 @@ func main() {
 			sampleConfig.System.Role.Sender.DBpass = `password`
 			sampleConfig.System.Role.Sender.DBname = `databaseName`
 			sampleConfig.System.Role.Sender.Cron = `a cron statement`
+			sampleConfig.System.Role.Sender.MaxBackups = `5`
 			sampleConfig.System.Role.Receiver.Database = `mysql`
 			sampleConfig.System.Role.Receiver.DBip = `z.z.z.z`
 			sampleConfig.System.Role.Receiver.DBport = `3306`
@@ -211,12 +214,12 @@ func main() {
 	}
 
 	// ensure working directory files exists
-	if !fileExists(config.System.WorkingDir + ".latest.restore") {
-		_, err := os.Create(config.System.WorkingDir + ".latest.restore")
+	if !fileExists(config.System.WorkingDir + ".latest.restoreDatabase") {
+		_, err := os.Create(config.System.WorkingDir + ".latest.restoreDatabase")
 		if err != nil {
 			glog.Exit(err)
 		}
-		glog.Info("created file: " + config.System.WorkingDir + ".latest.restore")
+		glog.Info("created file: " + config.System.WorkingDir + ".latest.restoreDatabase")
 	}
 
 	// chown all files to appropriate usr
@@ -237,7 +240,7 @@ func main() {
 		glog.Exit(err)
 	}
 
-	if err = os.Chown("/opt/tto/.latest.restore", uid, gid); err != nil {
+	if err = os.Chown("/opt/tto/.latest.restoreDatabase", uid, gid); err != nil {
 		glog.Exit(err)
 	}
 
@@ -293,9 +296,32 @@ func (service *Service) Manage(config config, command *command, role string) (st
 	switch role {
 	case "sender":
 
+		// get remote files
+		remoteFiles, err := config.getRemoteDumps(config.System.Role.Sender.DBname)
+		if err != nil {
+			glog.Fatal(err)
+		}
+
+		// init ring buffer with existing files
+		var rBuff ringbuffer.RingBuffer
+		sortedTimeSlice := ringbuffer.Parse(remoteFiles)
+		numOfBackups, err := strconv.Atoi(config.System.Role.Sender.MaxBackups)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		timesSliceToDelete := rBuff.Initialize(numOfBackups, config.System.Role.Sender.DBname, sortedTimeSlice)
+		glog.Info(errors.New("ring buffer filled up to max_backups with existing database dumps"))
+
+		// delete any remote files that don't fit into ring buffer
+		if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, timesSliceToDelete); err != nil {
+			glog.Error(err)
+		}
+		glog.Info(errors.New("database dumps on remote machine that didn't fit in ring buffer have been deleted"))
+
+		// cron setup
 		cronChannel := make(chan bool)
 		cj := cron.New()
-		err := cj.AddFunc(config.System.Role.Sender.Cron, func() { cronTriggered(cronChannel) })
+		err = cj.AddFunc(config.System.Role.Sender.Cron, func() { cronTriggered(cronChannel) })
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -304,17 +330,26 @@ func (service *Service) Manage(config config, command *command, role string) (st
 		for {
 			select {
 
-			// trigger on ticker
+			// cron trigger
 			case <-cronChannel:
 				mysqlDump, err := config.dumpDatabase()
 				if err != nil {
 					glog.Error(err)
-				} else {
-					copiedDump, err := config.transferDump(mysqlDump)
+				}
+				if err == nil {
+					copiedDump, err := config.transferDumpToRemote(mysqlDump)
 					if err != nil {
 						glog.Error(err)
 					}
 					glog.Info(errors.New("dumped and copied over database: " + copiedDump))
+
+					// add to ring buffer and delete any overwritten file
+					dumpToBeDeleted := rBuff.Add(config.System.Role.Sender.DBname, ringbuffer.Parse(mysqlDump)[0])
+					if !dumpToBeDeleted.IsZero() {
+						if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, []time.Time{dumpToBeDeleted}); err != nil {
+							glog.Error(err)
+						}
+					}
 				}
 
 			// trigger on signal
@@ -348,7 +383,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 		}
 		var event fsnotify.Event
 
-		// create channel for communicating with the database restore routine
+		// create channel for communicating with the database restoreDatabase routine
 		restoreChan := make(chan string)
 
 		for {
@@ -361,9 +396,9 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 						service.restoreLock = true
 
-						// run restore as a goroutine. goroutine holds a restore lock until it's done
+						// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 						go func() {
-							restoredDump, err := config.restore()
+							restoredDump, err := config.restoreDatabase()
 							if err != nil {
 								glog.Error(err)
 								restoreChan <- ""
@@ -371,16 +406,16 @@ func (service *Service) Manage(config config, command *command, role string) (st
 							restoreChan <- restoredDump
 						}()
 
-					} // else, silently skip and don't attempt to restore database as it's currently in progress
+					} // else, silently skip and don't attempt to restoreDatabase database as it's currently in progress
 				}
 
 				// TODO: add a mysqlDump cleanup buffer, holding X number of backups.
 
-			// trigger on dump restore being finished
+			// trigger on dump restoreDatabase being finished
 			case restoredDump := <-restoreChan:
 				service.restoreLock = false
 				if restoredDump == "" {
-					glog.Error(errors.New("failed to restore database"))
+					glog.Error(errors.New("failed to restoreDatabase database"))
 				} else {
 					glog.Info(errors.New("restored database: " + restoredDump))
 				}
@@ -406,39 +441,6 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 // ##### helper functions #####
 
-// TODO: rework cli parsing, there is glog flags, custom made -conf flag, plus earlier subcommands are read directly
-// parse -conf flag and return as pointer
-func cliFlags() *string {
-
-	// override glog default logging to stderr so daemon managers can read the logs (docker, systemd)
-	if err := flag.Set("logtostderr", "true"); err != nil {
-		glog.Fatal(err)
-	}
-	// default conf file
-	confFilePtr := flag.String("conf", "conf.json", "name of conf file.")
-
-	flag.Parse()
-	return confFilePtr
-}
-
-// ## cron helpers ##
-
-func cronTriggered(c chan bool) {
-
-	c <- true
-}
-
-// ## event helpers ##
-
-func isWriteEvent(event fsnotify.Event) bool {
-
-	if event.Op&fsnotify.Write == fsnotify.Write {
-		return true
-	}
-
-	return false
-}
-
 // ## database helpers ##
 
 func (config config) dumpDatabase() (string, error) {
@@ -458,7 +460,132 @@ func (config config) dumpDatabase() (string, error) {
 	return mysqlDump, nil
 }
 
-func (config config) transferDump(mysqlDump string) (string, error) {
+func (config config) restoreDatabase() (string, error) {
+
+	// ## .latest.dump actions
+
+	// check if lock dumpFile exists for .latest.dump
+	// retries 3 times with a 3 second sleep inbetween. Used for unfortunate timings...
+	retryCount := 0
+	for {
+		if fileExists(config.System.WorkingDir + "~.latest.dump.lock") {
+			retryCount++
+			time.Sleep(3 * time.Second)
+		} else {
+			break
+		}
+
+		if retryCount == 3 {
+			return "", errors.New("locked: .latest.dump is being used by another process, or lock file is stuck. Suggest manually removing ~.latest.dump.lock")
+		}
+	}
+
+	// create ~.latest.dump.lock
+	_, err := os.Create(config.System.WorkingDir + "~.latest.dump.lock")
+	if err != nil {
+		return "", err
+	}
+
+	// open .latest.dump and read first line
+	dumpFile, err := os.Open(config.System.WorkingDir + ".latest.dump")
+	if err != nil {
+		return "", err
+	}
+
+	scanner := bufio.NewScanner(dumpFile)
+	scanner.Scan()
+	latestDump := scanner.Text()
+	if err = dumpFile.Close(); err != nil {
+		return "", err
+	}
+
+	// delete ~.latest.dump.lock
+	if err = os.Remove(config.System.WorkingDir + "~.latest.dump.lock"); err != nil {
+		return "", err
+	}
+
+	// ## safety check: latest dump vs configuration database name
+	if strings.Compare(strings.Split(latestDump, "-")[0], config.System.Role.Receiver.DBname) != 0 {
+		// oh shit, someone is dumping one database but trying to restoreDatabase it into another one
+		return "", errors.New("the dumped database does not match the one configured in the conf file")
+	}
+
+	// ## .latest.restoreDatabase actions
+
+	// open .latest.restoreDatabase and read first line
+	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restoreDatabase")
+	if err != nil {
+		return "", err
+	}
+	scanner = bufio.NewScanner(restoreFile)
+	scanner.Scan()
+	latestRestore := scanner.Text()
+	if err = restoreFile.Close(); err != nil {
+		return "", err
+	}
+
+	// if dump and restoreDatabase not the same, then attempt to restoreDatabase the latestDump
+	if strings.Compare(latestDump, latestRestore) != 0 {
+
+		// TODO: error handling if database is DROP'd already... (not that it should be)
+
+		// open connection to database
+		db, err := database.Open(
+			config.System.Role.Receiver.DBport,
+			config.System.Role.Receiver.DBip,
+			config.System.Role.Receiver.DBuser,
+			config.System.Role.Receiver.DBpass,
+			config.System.Role.Receiver.DBname)
+		if err != nil {
+			return "", err
+		}
+
+		// restoreDatabase mysqldump into database
+		if err = database.Restore(db, config.System.WorkingDir+latestDump); err != nil {
+			return "", err
+		}
+
+		// update .latest.restoreDatabase with restored dump filename
+		if err = ioutil.WriteFile(config.System.WorkingDir+".latest.restoreDatabase", []byte(latestDump), 0600); err != nil {
+			return "", err
+		}
+
+		return latestDump, nil
+	}
+
+	return "", errors.New(".latest.dump and .latest.restoreDatabase are the same")
+}
+
+// ## remote system helpers ##
+
+func (config config) getRemoteDumps(dbName string) (string, error) {
+
+	cmd := "find " + config.System.WorkingDir + " -name *" + dbName + "*"
+
+	// connect to remote system
+	client := remote.ConnPrep(
+		config.System.Role.Sender.Dest,
+		config.System.Role.Sender.Port,
+		config.System.User,
+		config.System.Pass)
+	if err := client.Connect(); err != nil {
+		return "", err
+	}
+	if err := client.NewSession(); err != nil {
+		return "", err
+	}
+	result, err := client.RunCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	if err = client.CloseConnection(); err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 
 	// connect to remote system
 	client := remote.ConnPrep(
@@ -531,100 +658,71 @@ func (config config) transferDump(mysqlDump string) (string, error) {
 	return mysqlDump, nil
 }
 
-func (config config) restore() (string, error) {
+func (config config) deleteRemoteDump(dbName string, sliceOfTimestamps []time.Time) error {
 
-	// ## .latest.dump actions
+	// connect to remote system
+	client := remote.ConnPrep(
+		config.System.Role.Sender.Dest,
+		config.System.Role.Sender.Port,
+		config.System.User,
+		config.System.Pass)
+	if err := client.Connect(); err != nil {
+		return err
+	}
 
-	// check if lock dumpFile exists for .latest.dump
-	// retries 3 times with a 3 second sleep inbetween. Used for unfortunate timings...
-	retryCount := 0
-	for {
-		if fileExists(config.System.WorkingDir + "~.latest.dump.lock") {
-			retryCount++
-			time.Sleep(3 * time.Second)
-		} else {
-			break
+	for _, elem := range sliceOfTimestamps {
+
+		cmd := "rm " + config.System.WorkingDir + compileFilename(dbName, elem)
+
+		if err := client.NewSession(); err != nil {
+			return err
 		}
-
-		if retryCount == 3 {
-			return "", errors.New("locked: .latest.dump is being used by another process, or lock file is stuck. Suggest manually removing ~.latest.dump.lock")
-		}
-	}
-
-	// create ~.latest.dump.lock
-	_, err := os.Create(config.System.WorkingDir + "~.latest.dump.lock")
-	if err != nil {
-		return "", err
-	}
-
-	// open .latest.dump and read first line
-	dumpFile, err := os.Open(config.System.WorkingDir + ".latest.dump")
-	if err != nil {
-		return "", err
-	}
-
-	scanner := bufio.NewScanner(dumpFile)
-	scanner.Scan()
-	latestDump := scanner.Text()
-	if err = dumpFile.Close(); err != nil {
-		return "", err
-	}
-
-	// delete ~.latest.dump.lock
-	if err = os.Remove(config.System.WorkingDir + "~.latest.dump.lock"); err != nil {
-		return "", err
-	}
-
-	// ## safety check: latest dump vs configuration database name
-	if strings.Compare(strings.Split(latestDump, "-")[0], config.System.Role.Receiver.DBname) != 0 {
-		// oh shit, someone is dumping one database but trying to restore it into another one
-		return "", errors.New("the dumped database does not match the one configured in the conf file")
-	}
-
-	// ## .latest.restore actions
-
-	// open .latest.restore and read first line
-	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restore")
-	if err != nil {
-		return "", err
-	}
-	scanner = bufio.NewScanner(restoreFile)
-	scanner.Scan()
-	latestRestore := scanner.Text()
-	if err = restoreFile.Close(); err != nil {
-		return "", err
-	}
-
-	// if dump and restore not the same, then attempt to restore the latestDump
-	if strings.Compare(latestDump, latestRestore) != 0 {
-
-		// TODO: error handling if database is DROP'd already... (not that it should be)
-
-		// open connection to database
-		db, err := database.Open(
-			config.System.Role.Receiver.DBport,
-			config.System.Role.Receiver.DBip,
-			config.System.Role.Receiver.DBuser,
-			config.System.Role.Receiver.DBpass,
-			config.System.Role.Receiver.DBname)
+		_, err := client.RunCommand(cmd)
 		if err != nil {
-			return "", err
+			return err
 		}
-
-		// restore mysqldump into database
-		if err = database.Restore(db, config.System.WorkingDir+latestDump); err != nil {
-			return "", err
-		}
-
-		// update .latest.restore with restored dump filename
-		if err = ioutil.WriteFile(config.System.WorkingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
-			return "", err
-		}
-
-		return latestDump, nil
 	}
 
-	return "", errors.New(".latest.dump and .latest.restore are the same")
+	if err := client.CloseConnection(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ## app init helpers ##
+
+// TODO: rework cli parsing, there is glog flags, custom made -conf flag, plus earlier subcommands are read directly
+// parse -conf flag and return as pointer
+func cliFlags() *string {
+
+	// override glog default logging to stderr so daemon managers can read the logs (docker, systemd)
+	if err := flag.Set("logtostderr", "true"); err != nil {
+		glog.Fatal(err)
+	}
+	// default conf file
+	confFilePtr := flag.String("conf", "conf.json", "name of conf file.")
+
+	flag.Parse()
+	return confFilePtr
+}
+
+// ## cron helpers ##
+
+func cronTriggered(c chan bool) {
+
+	c <- true
+}
+
+// ## event helpers ##
+
+func isWriteEvent(event fsnotify.Event) bool {
+
+	if event.Op&fsnotify.Write == fsnotify.Write {
+		return true
+	}
+
+	return false
 }
 
 // ## file helpers ##
@@ -645,4 +743,11 @@ func removeFile(filename string) error {
 	}
 
 	return nil
+}
+
+func compileFilename(dbName string, fileTime time.Time) string {
+
+	var compiledString string
+	compiledString = dbName + "-" + fileTime.Format("20060102150405") + ".sql"
+	return compiledString
 }

@@ -37,7 +37,7 @@ func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string, workingDir string) (string, error) {
 
 	// YYYYMMDDhhmmss
-	currentTime := time.Now().Format("20060102150405")
+	currentTime := time.Now().UTC().Format("20060102150405") //TODO: remove static time format (or move it), buffer also relies on this format
 
 	portArg := "-P" + dbPort
 	ipArg := "-h" + dbIp
