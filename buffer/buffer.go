@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// ##### structs #####
-
 type CircularQueue struct {
 	// size of the queue, defined by the max_backups specified in conf.json
 	size int
