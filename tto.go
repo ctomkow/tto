@@ -15,6 +15,7 @@ import (
 	"github.com/robfig/cron"
 	"github.com/takama/daemon"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/signal"
 	"os/user"
@@ -34,24 +35,24 @@ type config struct {
 		Type       string `json:"type"`
 		Role       struct {
 			Sender struct {
-				Dest       string `json:"dest"`
-				Port       string `json:"port"`
-				Database   string `json:"database"`
-				DBip       string `json:"db_ip"`
-				DBport     string `json:"db_port"`
-				DBuser     string `json:"db_user"`
-				DBpass     string `json:"db_pass"`
-				DBname     string `json:"db_name"`
-				Cron       string `json:"cron"`
-				MaxBackups string `json:"max_backups"`
+				Dest       net.IPAddr `json:"dest"`
+				Port       uint16     `json:"port"`
+				Database   string     `json:"database"`
+				DBip       net.IPAddr `json:"db_ip"`
+				DBport     uint16     `json:"db_port"`
+				DBuser     string     `json:"db_user"`
+				DBpass     string     `json:"db_pass"`
+				DBname     string     `json:"db_name"`
+				Cron       string     `json:"cron"`
+				MaxBackups int       `json:"max_backups"`
 			}
 			Receiver struct {
-				Database string `json:"database"`
-				DBip     string `json:"db_ip"`
-				DBport   string `json:"db_port"`
-				DBuser   string `json:"db_user"`
-				DBpass   string `json:"db_pass"`
-				DBname   string `json:"db_name"`
+				Database string     `json:"database"`
+				DBip     net.IPAddr `json:"db_ip"`
+				DBport   uint16     `json:"db_port"`
+				DBuser   string     `json:"db_user"`
+				DBpass   string     `json:"db_pass"`
+				DBname   string     `json:"db_name"`
 			}
 		}
 	}
@@ -159,19 +160,19 @@ func main() {
 			sampleConfig.System.Pass = `password`
 			sampleConfig.System.WorkingDir = `/opt/tto/`
 			sampleConfig.System.Type = `sender|receiver`
-			sampleConfig.System.Role.Sender.Dest = `x.x.x.x`
-			sampleConfig.System.Role.Sender.Port = `22`
+			sampleConfig.System.Role.Sender.Dest = net.IPAddr{net.IPv4(6,6,6,6), ""}
+			sampleConfig.System.Role.Sender.Port = uint16(22)
 			sampleConfig.System.Role.Sender.Database = `mysql`
-			sampleConfig.System.Role.Sender.DBip = `y.y.y.y`
-			sampleConfig.System.Role.Sender.DBport = `3306`
+			sampleConfig.System.Role.Sender.DBip = net.IPAddr{net.IPv4(7,7,7,7), ""}
+			sampleConfig.System.Role.Sender.DBport = uint16(3306)
 			sampleConfig.System.Role.Sender.DBuser = `username`
 			sampleConfig.System.Role.Sender.DBpass = `password`
 			sampleConfig.System.Role.Sender.DBname = `databaseName`
 			sampleConfig.System.Role.Sender.Cron = `a cron statement`
-			sampleConfig.System.Role.Sender.MaxBackups = `5`
+			sampleConfig.System.Role.Sender.MaxBackups = int(5)
 			sampleConfig.System.Role.Receiver.Database = `mysql`
-			sampleConfig.System.Role.Receiver.DBip = `z.z.z.z`
-			sampleConfig.System.Role.Receiver.DBport = `3306`
+			sampleConfig.System.Role.Receiver.DBip = net.IPAddr{net.IPv4(8,8,8,8), ""}
+			sampleConfig.System.Role.Receiver.DBport = uint16(3306)
 			sampleConfig.System.Role.Receiver.DBuser = `username`
 			sampleConfig.System.Role.Receiver.DBpass = `password`
 			sampleConfig.System.Role.Receiver.DBname = `databaseName`
@@ -295,6 +296,15 @@ func (service *Service) Manage(config config, command *command, role string) (st
 	switch role {
 	case "sender":
 
+		// setup database connection for sender
+		var db = new(database.Database)
+		db.Make(config.System.Role.Sender.Database,
+			config.System.Role.Sender.DBip,
+			config.System.Role.Sender.DBport,
+			config.System.Role.Sender.DBuser,
+			config.System.Role.Sender.DBpass,
+			config.System.Role.Sender.DBname)
+
 		// get remote files
 		remoteFiles, err := config.getRemoteDumps(config.System.Role.Sender.DBname)
 		if err != nil {
@@ -304,7 +314,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 		// init ring buffer with existing files
 		var buff = new(CircularQueue)
 		sortedTimeSlice := ParseDbDumpFilename(remoteFiles)
-		numOfBackups, err := strconv.Atoi(config.System.Role.Sender.MaxBackups)
+		numOfBackups := config.System.Role.Sender.MaxBackups
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -331,7 +341,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 			// cron trigger
 			case <-cronChannel:
-				mysqlDump, err := config.dumpDatabase()
+				mysqlDump, err := db.Dump(config.System.WorkingDir)
 				if err != nil {
 					glog.Error(err)
 				}
@@ -364,6 +374,15 @@ func (service *Service) Manage(config config, command *command, role string) (st
 		}
 
 	case "receiver":
+
+		// setup database connection for receiver
+		var db = new(database.Database)
+		db.Make(config.System.Role.Sender.Database,
+			config.System.Role.Sender.DBip,
+			config.System.Role.Sender.DBport,
+			config.System.Role.Sender.DBuser,
+			config.System.Role.Sender.DBpass,
+			config.System.Role.Sender.DBname)
 
 		// a file watcher monitoring .latest.dump used by the receiver
 		watcher, err := fsnotify.NewWatcher()
@@ -398,7 +417,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 						// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 						go func() {
-							restoredDump, err := config.restoreDatabase()
+							restoredDump, err := restoreDatabase(db, config.System.WorkingDir)
 							if err != nil {
 								glog.Error(err)
 								restoreChan <- ""
@@ -441,24 +460,7 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 // ## database helpers ##
 
-func (config config) dumpDatabase() (string, error) {
-
-	// dump DB
-	mysqlDump, err := database.Dump(
-		config.System.Role.Sender.DBport,
-		config.System.Role.Sender.DBip,
-		config.System.Role.Sender.DBuser,
-		config.System.Role.Sender.DBpass,
-		config.System.Role.Sender.DBname,
-		config.System.WorkingDir)
-	if err != nil {
-		return "", err
-	}
-
-	return mysqlDump, nil
-}
-
-func (config config) restoreDatabase() (string, error) {
+func restoreDatabase(db *database.Database, workingDir string) (string, error) {
 
 	// ## .latest.dump actions
 
@@ -466,7 +468,7 @@ func (config config) restoreDatabase() (string, error) {
 	// retries 3 times with a 3 second sleep inbetween. Used for unfortunate timings...
 	retryCount := 0
 	for {
-		if fileExists(config.System.WorkingDir + "~.latest.dump.lock") {
+		if fileExists(workingDir + "~.latest.dump.lock") {
 			retryCount++
 			time.Sleep(3 * time.Second)
 		} else {
@@ -479,13 +481,13 @@ func (config config) restoreDatabase() (string, error) {
 	}
 
 	// create ~.latest.dump.lock
-	_, err := os.Create(config.System.WorkingDir + "~.latest.dump.lock")
+	_, err := os.Create(workingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
 	}
 
 	// open .latest.dump and read first line
-	dumpFile, err := os.Open(config.System.WorkingDir + ".latest.dump")
+	dumpFile, err := os.Open(workingDir + ".latest.dump")
 	if err != nil {
 		return "", err
 	}
@@ -498,12 +500,12 @@ func (config config) restoreDatabase() (string, error) {
 	}
 
 	// delete ~.latest.dump.lock
-	if err = os.Remove(config.System.WorkingDir + "~.latest.dump.lock"); err != nil {
+	if err = os.Remove(workingDir + "~.latest.dump.lock"); err != nil {
 		return "", err
 	}
 
 	// ## safety check: latest dump vs configuration database name
-	if strings.Compare(strings.Split(latestDump, "-")[0], config.System.Role.Receiver.DBname) != 0 {
+	if strings.Compare(strings.Split(latestDump, "-")[0], db.GetName()) != 0 {
 		// oh shit, someone is dumping one database but trying to restoreDatabase it into another one
 		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
@@ -511,7 +513,7 @@ func (config config) restoreDatabase() (string, error) {
 	// ## .latest.restore actions
 
 	// open .latest.restore and read first line
-	restoreFile, err := os.Open(config.System.WorkingDir + ".latest.restore")
+	restoreFile, err := os.Open(workingDir + ".latest.restore")
 	if err != nil {
 		return "", err
 	}
@@ -526,25 +528,13 @@ func (config config) restoreDatabase() (string, error) {
 	if strings.Compare(latestDump, latestRestore) != 0 {
 
 		// TODO: error handling if database is DROP'd already... (not that it should be)
-
-		// open connection to database
-		db, err := database.Open(
-			config.System.Role.Receiver.DBport,
-			config.System.Role.Receiver.DBip,
-			config.System.Role.Receiver.DBuser,
-			config.System.Role.Receiver.DBpass,
-			config.System.Role.Receiver.DBname)
-		if err != nil {
-			return "", err
-		}
-
 		// restoreDatabase mysqldump into database
-		if err = database.Restore(db, config.System.WorkingDir+latestDump); err != nil {
+		if err = db.Restore(workingDir+latestDump); err != nil {
 			return "", err
 		}
 
 		// update .latest.restore with restored dump filename
-		if err = ioutil.WriteFile(config.System.WorkingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
+		if err = ioutil.WriteFile(workingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
 			return "", err
 		}
 
@@ -562,8 +552,8 @@ func (config config) getRemoteDumps(dbName string) (string, error) {
 
 	// connect to remote system
 	client := remote.ConnPrep(
-		config.System.Role.Sender.Dest,
-		config.System.Role.Sender.Port,
+		config.System.Role.Sender.Dest.String(),
+		strconv.FormatUint(uint64(config.System.Role.Sender.Port), 10),
 		config.System.User,
 		config.System.Pass)
 	if err := client.Connect(); err != nil {
@@ -587,8 +577,8 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 
 	// connect to remote system
 	client := remote.ConnPrep(
-		config.System.Role.Sender.Dest,
-		config.System.Role.Sender.Port,
+		config.System.Role.Sender.Dest.String(),
+		strconv.FormatUint(uint64(config.System.Role.Sender.Port), 10),
 		config.System.User,
 		config.System.Pass)
 	if err := client.Connect(); err != nil {
@@ -660,8 +650,8 @@ func (config config) deleteRemoteDump(dbName string, arrayOfTimestamps []time.Ti
 
 	// connect to remote system
 	client := remote.ConnPrep(
-		config.System.Role.Sender.Dest,
-		config.System.Role.Sender.Port,
+		config.System.Role.Sender.Dest.String(),
+		strconv.FormatUint(uint64(config.System.Role.Sender.Port), 10),
 		config.System.User,
 		config.System.Pass)
 	if err := client.Connect(); err != nil {
@@ -690,7 +680,6 @@ func (config config) deleteRemoteDump(dbName string, arrayOfTimestamps []time.Ti
 
 // ## app init helpers ##
 
-// TODO: rework cli parsing, there is glog flags, custom made -conf flag, plus earlier subcommands are read directly
 // parse -conf flag and return as pointer
 func cliFlags() *string {
 

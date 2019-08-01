@@ -6,46 +6,86 @@ package database
 import (
 	"bufio"
 	"database/sql"
+	"errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// ##### public functions #####
+type Database struct {
 
-func Open(dbPort string, dbIp string, dbUser string, dbPass string, dbName string) (*sql.DB, error) {
+	// the opened db connection
+	connection *sql.DB
 
-	// prep DB connection
-	db, err := sql.Open("mysql", dbUser+":"+dbPass+"@tcp("+dbIp+":"+dbPort+")/"+dbName)
-	if err != nil {
-		return nil, err
-	}
+	// type of database, mysql, postgres, etc
+	impl string
 
-	err = db.Ping()
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
+	ip       net.IPAddr
+	port     uint16
+	username string
+	password string
+	name     string
 }
 
-func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName string, workingDir string) (string, error) {
+func (db *Database) Make(dbImpl string, ip net.IPAddr, port uint16, username string, password string, dbName string) {
+
+	db.impl = dbImpl
+	db.ip = ip
+	db.port = port
+	db.username = username
+	db.password = password
+	db.name = dbName
+}
+
+func (db *Database) Open() error {
+
+	var conn *sql.DB
+	var err error
+
+	if strings.Compare(db.impl, "mysql") == 0 {
+		conn, err = sql.Open(db.impl, db.username+":"+db.password+"@tcp("+db.ip.String()+":"+strconv.FormatUint(uint64(db.port), 10)+")/"+db.name)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("unsupported database type")
+	}
+
+	err = conn.Ping()
+	if err != nil {
+		return err
+	}
+
+	db.connection = conn
+
+	return nil
+}
+
+func (db *Database) Dump(workingDir string) (string, error) {
 
 	// YYYYMMDDhhmmss
 	currentTime := time.Now().UTC().Format("20060102150405") //TODO: remove static time format (or move it), buffer also relies on this format
 
-	portArg := "-P" + dbPort
-	ipArg := "-h" + dbIp
-	userArg := "-u" + dbUser
-	passArg := "-p" + dbPass
-	sqlFile := dbName + "-" + currentTime + ".sql"
+	ipArg := "-h" + db.ip.String()
+	portArg := "-P" + strconv.FormatUint(uint64(db.port), 10)
+	userArg := "-u" + db.username
+	passArg := "-p" + db.password
+	sqlFile := db.name + "-" + currentTime + ".sql"
+	var cmd *exec.Cmd
 
-	cmd := exec.Command("mysqldump", "--single-transaction", "--routines", "--triggers", portArg, ipArg, userArg, passArg, dbName)
+	if strings.Compare(db.impl, "mysql") == 0 {
+		cmd = exec.Command("mysqldump", "--single-transaction", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name)
+	} else {
+		return "", errors.New("unsupported database type")
+	}
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", err
@@ -72,7 +112,7 @@ func Dump(dbPort string, dbIp string, dbUser string, dbPass string, dbName strin
 	return sqlFile, nil
 }
 
-func Restore(db *sql.DB, dump string) error {
+func (db *Database) Restore(dump string) error {
 
 	// read .sql statement by statement and fire off to database server
 	// NOTE: bufio.NewScanner has a line length limit of 65536 chars. mysqldump does only one INSERT per table. Not good!
@@ -90,7 +130,7 @@ func Restore(db *sql.DB, dump string) error {
 	reader := bufio.NewReader(fd)
 	var buffer strings.Builder
 
-	// loop and send queries until EOF
+	// send queries until EOF
 	for {
 
 		statement, err := reader.ReadString(';')
@@ -108,11 +148,8 @@ func Restore(db *sql.DB, dump string) error {
 			return err
 		}
 
-		//fmt.Print(buffer.String())
-		//fmt.Printf("%q", oracleBytes)
-
 		if oracleBytes[0] == 10 { // newline '\n' aka utf decimal '10'
-			_, err = db.Exec(buffer.String())
+			_, err = db.connection.Exec(buffer.String())
 			if err != nil {
 				return err
 			}
@@ -125,9 +162,9 @@ func Restore(db *sql.DB, dump string) error {
 	return nil
 }
 
-func Drop(db *sql.DB, dbName string) error {
+func (db *Database) Drop() error {
 
-	_, err := db.Exec("DROP DATABASE " + dbName + ";")
+	_, err := db.connection.Exec("DROP DATABASE " + db.name + ";")
 	if err != nil {
 		return err
 	}
@@ -135,12 +172,17 @@ func Drop(db *sql.DB, dbName string) error {
 	return nil
 }
 
-func Create(db *sql.DB, dbName string) error {
+func (db *Database) Create() error {
 
-	_, err := db.Exec("CREATE DATABASE " + dbName + ";")
+	_, err := db.connection.Exec("CREATE DATABASE " + db.name + ";")
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (db *Database) GetName() string {
+
+	return db.name
 }
