@@ -12,7 +12,6 @@ import (
 	"github.com/ctomkow/tto/remote"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
-	"github.com/robfig/cron"
 	"github.com/takama/daemon"
 	"io/ioutil"
 	"net"
@@ -68,7 +67,6 @@ type command struct {
 
 type Service struct {
 	daemon.Daemon
-	restoreLock bool
 }
 
 // ##### constants #####
@@ -81,26 +79,26 @@ const (
 
 // ##### methods #####
 
-func (command *command) cliCommands() {
+func (cmd *command) cliCmds() {
 
 	if len(os.Args) > 1 {
-		cmd := os.Args[1]
-		switch cmd {
+		cmds := os.Args[1]
+		switch cmds {
 		case "install":
-			command.install = true
+			cmd.install = true
 		case "remove":
-			command.remove = true
+			cmd.remove = true
 		case "start":
-			command.start = true
+			cmd.start = true
 		case "stop":
-			command.stop = true
+			cmd.stop = true
 		case "status":
-			command.status = true
+			cmd.status = true
 		}
 	}
 }
 
-func (config *config) loadConfig(filename string) error {
+func (conf *config) loadConfig(filename string) error {
 
 	// TODO: config file input validation. Depends if the app is a sender or receiver
 
@@ -115,7 +113,7 @@ func (config *config) loadConfig(filename string) error {
 	}()
 
 	jsonParser := json.NewDecoder(fd)
-	if err = jsonParser.Decode(&config); err != nil {
+	if err = jsonParser.Decode(&conf); err != nil {
 		return err
 	}
 
@@ -130,12 +128,12 @@ func main() {
 	configFile := cliFlags()
 
 	// parse cli commands
-	command := command{}
-	command.cliCommands()
+	cmd := command{}
+	cmd.cliCmds()
 
 	// if service is being installed, create sample conf file; /etc/tto/conf.json if it doesn't exist
 	switch {
-	case command.install:
+	case cmd.install:
 
 		// create config directory if it doesn't exist
 		if err := os.MkdirAll("/etc/tto/", os.ModePerm); err != nil {
@@ -255,8 +253,8 @@ func main() {
 		glog.Fatal(err)
 	}
 
-	service := &Service{srv, false}
-	status, err := service.Manage(config, &command, daemonRole)
+	service := &Service{srv}
+	status, err := service.Manage(config, &cmd, daemonRole)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -266,24 +264,24 @@ func main() {
 
 // ##### daemon manager #####
 
-func (service *Service) Manage(config config, command *command, role string) (string, error) {
+func (srv *Service) Manage(conf config, cmd *command, role string) (string, error) {
 
 	usage := "Usage: tto install | remove | start | stop | status"
 
-	if command.install {
-		return service.Install()
+	if cmd.install {
+		return srv.Install()
 
-	} else if command.remove {
-		return service.Remove()
+	} else if cmd.remove {
+		return srv.Remove()
 
-	} else if command.start {
-		return service.Start()
+	} else if cmd.start {
+		return srv.Start()
 
-	} else if command.stop {
-		return service.Stop()
+	} else if cmd.stop {
+		return srv.Stop()
 
-	} else if command.status {
-		return service.Status()
+	} else if cmd.status {
+		return srv.Status()
 
 	}
 
@@ -295,158 +293,13 @@ func (service *Service) Manage(config config, command *command, role string) (st
 
 	switch role {
 	case "sender":
-
-		// setup database connection for sender
-		var db = new(database.Database)
-		db.Make(config.System.Role.Sender.Database,
-			config.System.Role.Sender.DBip,
-			config.System.Role.Sender.DBport,
-			config.System.Role.Sender.DBuser,
-			config.System.Role.Sender.DBpass,
-			config.System.Role.Sender.DBname)
-
-		// get remote files
-		remoteFiles, err := config.getRemoteDumps(config.System.Role.Sender.DBname)
-		if err != nil {
+		if err := conf.Sender(); err != nil {
 			glog.Fatal(err)
-		}
-
-		// init ring buffer with existing files
-		var buff = new(CircularQueue)
-		sortedTimeSlice := ParseDbDumpFilename(remoteFiles)
-		numOfBackups := config.System.Role.Sender.MaxBackups
-		if err != nil {
-			glog.Fatal(err)
-		}
-		buffOverflowTimestamps := buff.Make(numOfBackups, config.System.Role.Sender.DBname, sortedTimeSlice)
-		glog.Info(errors.New("ring buffer filled up to max_backups with existing database dumps"))
-
-		// delete any remote files that don't fit into ring buffer
-		if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, buffOverflowTimestamps); err != nil {
-			glog.Error(err)
-		}
-		glog.Info(errors.New("database dumps on remote machine that didn't fit in ring buffer have been deleted"))
-
-		// cron setup
-		cronChannel := make(chan bool)
-		cj := cron.New()
-		err = cj.AddFunc(config.System.Role.Sender.Cron, func() { cronTriggered(cronChannel) })
-		if err != nil {
-			glog.Fatal(err)
-		}
-		cj.Start()
-
-		for {
-			select {
-
-			// cron trigger
-			case <-cronChannel:
-				mysqlDump, err := db.Dump(config.System.WorkingDir)
-				if err != nil {
-					glog.Error(err)
-				}
-				if err == nil {
-					copiedDump, err := config.transferDumpToRemote(mysqlDump)
-					if err != nil {
-						glog.Error(err)
-					}
-					glog.Info(errors.New("dumped and copied over database: " + copiedDump))
-
-					// add to ring buffer and delete any overwritten file
-					buffOverflowTimestamp := buff.Enqueue(config.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
-					if !buffOverflowTimestamp.IsZero() {
-						if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, []time.Time{buffOverflowTimestamp}); err != nil {
-							glog.Error(err)
-						}
-						glog.Info(errors.New("deleted old database dump: " + CompileDbDumpFilename(config.System.Role.Sender.DBname, buffOverflowTimestamp)))
-					}
-				}
-
-			// trigger on signal
-			case killSignal := <-interrupt:
-				glog.Error(killSignal)
-
-				if killSignal == os.Interrupt {
-					return "", errors.New("daemon was interrupted by system signal")
-				}
-				return "", errors.New("daemon was killed")
-			}
 		}
 
 	case "receiver":
-
-		// setup database connection for receiver
-		var db = new(database.Database)
-		db.Make(config.System.Role.Sender.Database,
-			config.System.Role.Sender.DBip,
-			config.System.Role.Sender.DBport,
-			config.System.Role.Sender.DBuser,
-			config.System.Role.Sender.DBpass,
-			config.System.Role.Sender.DBname)
-
-		// a file watcher monitoring .latest.dump used by the receiver
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
+		if err := conf.Receiver(); err != nil {
 			glog.Fatal(err)
-		}
-		defer func() {
-			if err := watcher.Close(); err != nil {
-				glog.Exit(err)
-			}
-		}()
-
-		// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
-		// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
-		if err = watcher.Add(config.System.WorkingDir + ".latest.dump"); err != nil {
-			glog.Fatal(err)
-		}
-		var event fsnotify.Event
-
-		// create channel for communicating with the database restoreDatabase routine
-		restoreChan := make(chan string)
-
-		for {
-			select {
-
-			// trigger on write event
-			case event = <-watcher.Events:
-				if isWriteEvent(event) {
-					if !service.restoreLock {
-
-						service.restoreLock = true
-
-						// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
-						go func() {
-							restoredDump, err := restoreDatabase(db, config.System.WorkingDir)
-							if err != nil {
-								glog.Error(err)
-								restoreChan <- ""
-							}
-							restoreChan <- restoredDump
-						}()
-
-					} // else, silently skip and don't attempt to restoreDatabase database as it's currently in progress
-				}
-
-			// trigger on dump restoreDatabase being finished
-			case restoredDump := <-restoreChan:
-				service.restoreLock = false
-				if restoredDump == "" {
-					glog.Error(errors.New("failed to restoreDatabase database"))
-				} else {
-					glog.Info(errors.New("restored database: " + restoredDump))
-				}
-
-			// trigger on signal
-			case killSignal := <-interrupt:
-				glog.Error(killSignal)
-
-				if killSignal == os.Interrupt {
-					return "", errors.New("daemon was interrupted by system signal")
-				}
-				return "", errors.New("daemon was killed")
-
-			}
 		}
 
 	default:
@@ -546,16 +399,16 @@ func restoreDatabase(db *database.Database, workingDir string) (string, error) {
 
 // ## remote system helpers ##
 
-func (config config) getRemoteDumps(dbName string) (string, error) {
+func (conf *config) getRemoteDumps(dbName string) (string, error) {
 
-	cmd := "find " + config.System.WorkingDir + " -name *" + dbName + "*"
+	cmd := "find " + conf.System.WorkingDir + " -name *" + dbName + "*"
 
 	// connect to remote system
 	client := remote.ConnPrep(
-		config.System.Role.Sender.Dest.String(),
-		strconv.FormatUint(uint64(config.System.Role.Sender.Port), 10),
-		config.System.User,
-		config.System.Pass)
+		conf.System.Role.Sender.Dest.String(),
+		strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
+		conf.System.User,
+		conf.System.Pass)
 	if err := client.Connect(); err != nil {
 		return "", err
 	}
@@ -573,14 +426,14 @@ func (config config) getRemoteDumps(dbName string) (string, error) {
 	return result, nil
 }
 
-func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
+func (conf *config) transferDumpToRemote(mysqlDump string) (string, error) {
 
 	// connect to remote system
 	client := remote.ConnPrep(
-		config.System.Role.Sender.Dest.String(),
-		strconv.FormatUint(uint64(config.System.Role.Sender.Port), 10),
-		config.System.User,
-		config.System.Pass)
+		conf.System.Role.Sender.Dest.String(),
+		strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
+		conf.System.User,
+		conf.System.Pass)
 	if err := client.Connect(); err != nil {
 		return "", err
 	}
@@ -589,7 +442,7 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	if err := client.NewSession(); err != nil {
 		return "", err
 	}
-	_, err := client.RunCommand("touch " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err := client.RunCommand("touch " + conf.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
 	}
@@ -598,7 +451,7 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	if err = client.CopyFile(mysqlDump, config.System.WorkingDir, "0600"); err != nil {
+	if err = client.CopyFile(mysqlDump, conf.System.WorkingDir, "0600"); err != nil {
 		return "", err
 	}
 
@@ -606,7 +459,7 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~" + mysqlDump + ".lock")
+	_, err = client.RunCommand("rm " + conf.System.WorkingDir + "~" + mysqlDump + ".lock")
 	if err != nil {
 		return "", err
 	}
@@ -615,7 +468,7 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("touch " + config.System.WorkingDir + "~.latest.dump.lock")
+	_, err = client.RunCommand("touch " + conf.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
 	}
@@ -624,7 +477,7 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("echo " + mysqlDump + " > " + config.System.WorkingDir + ".latest.dump")
+	_, err = client.RunCommand("echo " + mysqlDump + " > " + conf.System.WorkingDir + ".latest.dump")
 	if err != nil {
 		return "", err
 	}
@@ -633,34 +486,34 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	if err = client.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("rm " + config.System.WorkingDir + "~.latest.dump.lock")
+	_, err = client.RunCommand("rm " + conf.System.WorkingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
 	}
 
 	// delete local dump
-	if err = removeFile(config.System.WorkingDir + mysqlDump); err != nil {
+	if err = removeFile(conf.System.WorkingDir + mysqlDump); err != nil {
 		return "", err
 	}
 
 	return mysqlDump, nil
 }
 
-func (config config) deleteRemoteDump(dbName string, arrayOfTimestamps []time.Time) error {
+func (conf *config) deleteRemoteDump(dbName string, arrayOfTimestamps []time.Time) error {
 
 	// connect to remote system
 	client := remote.ConnPrep(
-		config.System.Role.Sender.Dest.String(),
-		strconv.FormatUint(uint64(config.System.Role.Sender.Port), 10),
-		config.System.User,
-		config.System.Pass)
+		conf.System.Role.Sender.Dest.String(),
+		strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
+		conf.System.User,
+		conf.System.Pass)
 	if err := client.Connect(); err != nil {
 		return err
 	}
 
 	for _, elem := range arrayOfTimestamps {
 
-		cmd := "rm " + config.System.WorkingDir + CompileDbDumpFilename(dbName, elem)
+		cmd := "rm " + conf.System.WorkingDir + CompileDbDumpFilename(dbName, elem)
 
 		if err := client.NewSession(); err != nil {
 			return err
