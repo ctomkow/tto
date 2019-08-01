@@ -37,7 +37,7 @@ func ParseDbDumpFilename(filename string) []time.Time {
 		if err != nil {
 			glog.Fatal(err)
 		}
-		betweenDashDot :=slicedElements[0]
+		betweenDashDot := slicedElements[0]
 
 		// parse timestamp into time.Time
 		timeOfDump, err := parseTimeString(betweenDashDot)

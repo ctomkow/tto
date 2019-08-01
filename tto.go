@@ -44,7 +44,7 @@ type config struct {
 				DBpass     string     `json:"db_pass"`
 				DBname     string     `json:"db_name"`
 				Cron       string     `json:"cron"`
-				MaxBackups int       `json:"max_backups"`
+				MaxBackups int        `json:"max_backups"`
 			}
 			Receiver struct {
 				Database string     `json:"database"`
@@ -160,10 +160,10 @@ func main() {
 			sampleConfig.System.Pass = `password`
 			sampleConfig.System.WorkingDir = `/opt/tto/`
 			sampleConfig.System.Type = `sender|receiver`
-			sampleConfig.System.Role.Sender.Dest = net.IPAddr{net.IPv4(6,6,6,6), ""}
+			sampleConfig.System.Role.Sender.Dest = net.IPAddr{net.IPv4(6, 6, 6, 6), ""}
 			sampleConfig.System.Role.Sender.Port = uint16(22)
 			sampleConfig.System.Role.Sender.Database = `mysql`
-			sampleConfig.System.Role.Sender.DBip = net.IPAddr{net.IPv4(7,7,7,7), ""}
+			sampleConfig.System.Role.Sender.DBip = net.IPAddr{net.IPv4(7, 7, 7, 7), ""}
 			sampleConfig.System.Role.Sender.DBport = uint16(3306)
 			sampleConfig.System.Role.Sender.DBuser = `username`
 			sampleConfig.System.Role.Sender.DBpass = `password`
@@ -171,7 +171,7 @@ func main() {
 			sampleConfig.System.Role.Sender.Cron = `a cron statement`
 			sampleConfig.System.Role.Sender.MaxBackups = int(5)
 			sampleConfig.System.Role.Receiver.Database = `mysql`
-			sampleConfig.System.Role.Receiver.DBip = net.IPAddr{net.IPv4(8,8,8,8), ""}
+			sampleConfig.System.Role.Receiver.DBip = net.IPAddr{net.IPv4(8, 8, 8, 8), ""}
 			sampleConfig.System.Role.Receiver.DBport = uint16(3306)
 			sampleConfig.System.Role.Receiver.DBuser = `username`
 			sampleConfig.System.Role.Receiver.DBpass = `password`
@@ -529,7 +529,7 @@ func restoreDatabase(db *database.Database, workingDir string) (string, error) {
 
 		// TODO: error handling if database is DROP'd already... (not that it should be)
 		// restoreDatabase mysqldump into database
-		if err = db.Restore(workingDir+latestDump); err != nil {
+		if err = db.Restore(workingDir + latestDump); err != nil {
 			return "", err
 		}
 
