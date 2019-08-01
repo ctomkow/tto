@@ -55,8 +55,7 @@ func ParseDbDumpFilename(filename string) []time.Time {
 
 func CompileDbDumpFilename(dbName string, timestamp time.Time) string {
 
-	var compiledString string
-	compiledString = dbName + "-" + timestamp.Format("20060102150405") + ".sql"
+	compiledString := dbName + "-" + timestamp.Format("20060102150405") + ".sql"
 	return compiledString
 }
 
