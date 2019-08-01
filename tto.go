@@ -10,7 +10,6 @@ import (
 	"flag"
 	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/remote"
-	"github.com/ctomkow/tto/buffer"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
@@ -303,17 +302,17 @@ func (service *Service) Manage(config config, command *command, role string) (st
 		}
 
 		// init ring buffer with existing files
-		var buff buffer.CircularQueue
-		sortedTimeSlice := buffer.Parse(remoteFiles)
+		var buff = new(CircularQueue)
+		sortedTimeSlice := ParseDbDumpFilename(remoteFiles)
 		numOfBackups, err := strconv.Atoi(config.System.Role.Sender.MaxBackups)
 		if err != nil {
 			glog.Fatal(err)
 		}
-		timesSliceToDelete := buff.Make(numOfBackups, config.System.Role.Sender.DBname, sortedTimeSlice)
+		buffOverflowTimestamps := buff.Make(numOfBackups, config.System.Role.Sender.DBname, sortedTimeSlice)
 		glog.Info(errors.New("ring buffer filled up to max_backups with existing database dumps"))
 
 		// delete any remote files that don't fit into ring buffer
-		if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, timesSliceToDelete); err != nil {
+		if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, buffOverflowTimestamps); err != nil {
 			glog.Error(err)
 		}
 		glog.Info(errors.New("database dumps on remote machine that didn't fit in ring buffer have been deleted"))
@@ -344,12 +343,12 @@ func (service *Service) Manage(config config, command *command, role string) (st
 					glog.Info(errors.New("dumped and copied over database: " + copiedDump))
 
 					// add to ring buffer and delete any overwritten file
-					dumpToBeDeleted := buff.Enqueue(config.System.Role.Sender.DBname, buffer.Parse(mysqlDump)[0])
-					if !dumpToBeDeleted.IsZero() {
-						if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, []time.Time{dumpToBeDeleted}); err != nil {
+					buffOverflowTimestamp := buff.Enqueue(config.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
+					if !buffOverflowTimestamp.IsZero() {
+						if err := config.deleteRemoteDump(config.System.Role.Sender.DBname, []time.Time{buffOverflowTimestamp}); err != nil {
 							glog.Error(err)
 						}
-						glog.Info(errors.New("deleted old database dump: " + compileFilename(config.System.Role.Sender.DBname, dumpToBeDeleted)))
+						glog.Info(errors.New("deleted old database dump: " + CompileDbDumpFilename(config.System.Role.Sender.DBname, buffOverflowTimestamp)))
 					}
 				}
 
@@ -657,7 +656,7 @@ func (config config) transferDumpToRemote(mysqlDump string) (string, error) {
 	return mysqlDump, nil
 }
 
-func (config config) deleteRemoteDump(dbName string, sliceOfTimestamps []time.Time) error {
+func (config config) deleteRemoteDump(dbName string, arrayOfTimestamps []time.Time) error {
 
 	// connect to remote system
 	client := remote.ConnPrep(
@@ -669,9 +668,9 @@ func (config config) deleteRemoteDump(dbName string, sliceOfTimestamps []time.Ti
 		return err
 	}
 
-	for _, elem := range sliceOfTimestamps {
+	for _, elem := range arrayOfTimestamps {
 
-		cmd := "rm " + config.System.WorkingDir + compileFilename(dbName, elem)
+		cmd := "rm " + config.System.WorkingDir + CompileDbDumpFilename(dbName, elem)
 
 		if err := client.NewSession(); err != nil {
 			return err
@@ -742,11 +741,4 @@ func removeFile(filename string) error {
 	}
 
 	return nil
-}
-
-func compileFilename(dbName string, fileTime time.Time) string {
-
-	var compiledString string
-	compiledString = dbName + "-" + fileTime.Format("20060102150405") + ".sql"
-	return compiledString
 }

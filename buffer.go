@@ -1,7 +1,7 @@
 // Craig Tomkow
 // July 30, 2019
 
-package buffer
+package main
 
 import (
 	"time"
@@ -54,7 +54,7 @@ func (cq *CircularQueue) Enqueue(dbName string, timestamp time.Time) time.Time {
 	cq.queue[cq.head] = struct {
 		name      string
 		timestamp time.Time
-	}{name: compileFilename(dbName, timestamp), timestamp: timestamp}
+	}{name: CompileDbDumpFilename(dbName, timestamp), timestamp: timestamp}
 
 	// in this order!
 	cq.updateHead()
