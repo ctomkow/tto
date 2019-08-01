@@ -16,15 +16,11 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/signal"
 	"os/user"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
-
-// ##### structs #####
 
 type config struct {
 	System struct {
@@ -69,15 +65,11 @@ type Service struct {
 	daemon.Daemon
 }
 
-// ##### constants #####
-
 const (
 	// name of the service
 	name        = "tto"
 	description = "3-2-1 go!"
 )
-
-// ##### methods #####
 
 func (cmd *command) cliCmds() {
 
@@ -119,8 +111,6 @@ func (conf *config) loadConfig(filename string) error {
 
 	return nil
 }
-
-// ##### main #####
 
 func main() {
 
@@ -262,7 +252,7 @@ func main() {
 	glog.Flush()
 }
 
-// ##### daemon manager #####
+// daemon manager
 
 func (srv *Service) Manage(conf config, cmd *command, role string) (string, error) {
 
@@ -285,21 +275,15 @@ func (srv *Service) Manage(conf config, cmd *command, role string) (string, erro
 
 	}
 
-	// Set up channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
-
 	switch role {
 	case "sender":
 		if err := conf.Sender(); err != nil {
-			glog.Fatal(err)
+			return "", err
 		}
 
 	case "receiver":
 		if err := conf.Receiver(); err != nil {
-			glog.Fatal(err)
+			return "", err
 		}
 
 	default:
@@ -308,8 +292,6 @@ func (srv *Service) Manage(conf config, cmd *command, role string) (string, erro
 
 	return usage, nil
 }
-
-// ##### helper functions #####
 
 // ## database helpers ##
 
