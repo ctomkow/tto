@@ -4,22 +4,16 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
-	"github.com/ctomkow/tto/database"
-	"github.com/ctomkow/tto/remote"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/takama/daemon"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/user"
 	"strconv"
-	"strings"
-	"time"
 )
 
 type config struct {
@@ -293,226 +287,6 @@ func (srv *Service) Manage(conf config, cmd *command, role string) (string, erro
 	return usage, nil
 }
 
-// ## database helpers ##
-
-func restoreDatabase(db *database.Database, workingDir string) (string, error) {
-
-	// ## .latest.dump actions
-
-	// check if lock dumpFile exists for .latest.dump
-	// retries 3 times with a 3 second sleep inbetween. Used for unfortunate timings...
-	retryCount := 0
-	for {
-		if fileExists(workingDir + "~.latest.dump.lock") {
-			retryCount++
-			time.Sleep(3 * time.Second)
-		} else {
-			break
-		}
-
-		if retryCount == 3 {
-			return "", errors.New("locked: .latest.dump is being used by another process, or lock file is stuck. Suggest manually removing ~.latest.dump.lock")
-		}
-	}
-
-	// create ~.latest.dump.lock
-	_, err := os.Create(workingDir + "~.latest.dump.lock")
-	if err != nil {
-		return "", err
-	}
-
-	// open .latest.dump and read first line
-	dumpFile, err := os.Open(workingDir + ".latest.dump")
-	if err != nil {
-		return "", err
-	}
-
-	scanner := bufio.NewScanner(dumpFile)
-	scanner.Scan()
-	latestDump := scanner.Text()
-	if err = dumpFile.Close(); err != nil {
-		return "", err
-	}
-
-	// delete ~.latest.dump.lock
-	if err = os.Remove(workingDir + "~.latest.dump.lock"); err != nil {
-		return "", err
-	}
-
-	// ## safety check: latest dump vs configuration database name
-	if strings.Compare(strings.Split(latestDump, "-")[0], db.GetName()) != 0 {
-		// oh shit, someone is dumping one database but trying to restoreDatabase it into another one
-		return "", errors.New("the dumped database does not match the one configured in the conf file")
-	}
-
-	// ## .latest.restore actions
-
-	// open .latest.restore and read first line
-	restoreFile, err := os.Open(workingDir + ".latest.restore")
-	if err != nil {
-		return "", err
-	}
-	scanner = bufio.NewScanner(restoreFile)
-	scanner.Scan()
-	latestRestore := scanner.Text()
-	if err = restoreFile.Close(); err != nil {
-		return "", err
-	}
-
-	// if dump and restoreDatabase not the same, then attempt to restoreDatabase the latestDump
-	if strings.Compare(latestDump, latestRestore) != 0 {
-
-		// TODO: error handling if database is DROP'd already... (not that it should be)
-		// restoreDatabase mysqldump into database
-		if err = db.Restore(workingDir + latestDump); err != nil {
-			return "", err
-		}
-
-		// update .latest.restore with restored dump filename
-		if err = ioutil.WriteFile(workingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
-			return "", err
-		}
-
-		return latestDump, nil
-	}
-
-	return "", errors.New(".latest.dump and .latest.restore are the same")
-}
-
-// ## remote system helpers ##
-
-func (conf *config) getRemoteDumps(dbName string) (string, error) {
-
-	cmd := "find " + conf.System.WorkingDir + " -name *" + dbName + "*"
-
-	// connect to remote system
-	client := remote.ConnPrep(
-		conf.System.Role.Sender.Dest.String(),
-		strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
-		conf.System.User,
-		conf.System.Pass)
-	if err := client.Connect(); err != nil {
-		return "", err
-	}
-	if err := client.NewSession(); err != nil {
-		return "", err
-	}
-	result, err := client.RunCommand(cmd)
-	if err != nil {
-		return "", err
-	}
-	if err = client.CloseConnection(); err != nil {
-		return "", err
-	}
-
-	return result, nil
-}
-
-func (conf *config) transferDumpToRemote(mysqlDump string) (string, error) {
-
-	// connect to remote system
-	client := remote.ConnPrep(
-		conf.System.Role.Sender.Dest.String(),
-		strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
-		conf.System.User,
-		conf.System.Pass)
-	if err := client.Connect(); err != nil {
-		return "", err
-	}
-
-	// add lock file on remote system for mysql dump
-	if err := client.NewSession(); err != nil {
-		return "", err
-	}
-	_, err := client.RunCommand("touch " + conf.System.WorkingDir + "~" + mysqlDump + ".lock")
-	if err != nil {
-		return "", err
-	}
-
-	// copy dump to remote system
-	if err = client.NewSession(); err != nil {
-		return "", err
-	}
-	if err = client.CopyFile(mysqlDump, conf.System.WorkingDir, "0600"); err != nil {
-		return "", err
-	}
-
-	// remove lock file on remote system for mysql dump
-	if err = client.NewSession(); err != nil {
-		return "", err
-	}
-	_, err = client.RunCommand("rm " + conf.System.WorkingDir + "~" + mysqlDump + ".lock")
-	if err != nil {
-		return "", err
-	}
-
-	// add lock file on remote system for .latest.dump
-	if err = client.NewSession(); err != nil {
-		return "", err
-	}
-	_, err = client.RunCommand("touch " + conf.System.WorkingDir + "~.latest.dump.lock")
-	if err != nil {
-		return "", err
-	}
-
-	// update latest dump notes on remote system
-	if err = client.NewSession(); err != nil {
-		return "", err
-	}
-	_, err = client.RunCommand("echo " + mysqlDump + " > " + conf.System.WorkingDir + ".latest.dump")
-	if err != nil {
-		return "", err
-	}
-
-	// remove lock file on remote system for .latest.dump
-	if err = client.NewSession(); err != nil {
-		return "", err
-	}
-	_, err = client.RunCommand("rm " + conf.System.WorkingDir + "~.latest.dump.lock")
-	if err != nil {
-		return "", err
-	}
-
-	// delete local dump
-	if err = removeFile(conf.System.WorkingDir + mysqlDump); err != nil {
-		return "", err
-	}
-
-	return mysqlDump, nil
-}
-
-func (conf *config) deleteRemoteDump(dbName string, arrayOfTimestamps []time.Time) error {
-
-	// connect to remote system
-	client := remote.ConnPrep(
-		conf.System.Role.Sender.Dest.String(),
-		strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
-		conf.System.User,
-		conf.System.Pass)
-	if err := client.Connect(); err != nil {
-		return err
-	}
-
-	for _, elem := range arrayOfTimestamps {
-
-		cmd := "rm " + conf.System.WorkingDir + CompileDbDumpFilename(dbName, elem)
-
-		if err := client.NewSession(); err != nil {
-			return err
-		}
-		_, err := client.RunCommand(cmd)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := client.CloseConnection(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // ## app init helpers ##
 
 // parse -conf flag and return as pointer
@@ -529,14 +303,10 @@ func cliFlags() *string {
 	return confFilePtr
 }
 
-// ## cron helpers ##
-
 func cronTriggered(c chan bool) {
 
 	c <- true
 }
-
-// ## event helpers ##
 
 func isWriteEvent(event fsnotify.Event) bool {
 
@@ -547,8 +317,6 @@ func isWriteEvent(event fsnotify.Event) bool {
 	return false
 }
 
-// ## file helpers ##
-
 func fileExists(filename string) bool {
 
 	info, err := os.Stat(filename)
@@ -556,13 +324,4 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-func removeFile(filename string) error {
-
-	if err := os.Remove(filename); err != nil {
-		return err
-	}
-
-	return nil
 }

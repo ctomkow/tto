@@ -7,8 +7,6 @@ import (
 	"bytes"
 )
 
-// ##### public methods #####
-
 func (sc *SSH) RunCommand(command string) (string, error) {
 
 	var stdoutBuffer bytes.Buffer

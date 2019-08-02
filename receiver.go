@@ -1,8 +1,12 @@
+// Craig Tomkow
+// August 2, 2019
+
 package main
 
 import (
 	"errors"
 	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/processes"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"os"
@@ -66,7 +70,7 @@ func (conf *config) Receiver() error {
 
 					// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 					go func() {
-						restoredDump, err := restoreDatabase(db, conf.System.WorkingDir)
+						restoredDump, err := processes.RestoreDatabase(db, conf.System.WorkingDir)
 						if err != nil {
 							glog.Error(err)
 							restoreChan <- ""

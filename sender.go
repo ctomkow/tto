@@ -1,14 +1,17 @@
+// Craig Tomkow
+// August 2, 2019
+
 package main
 
 import (
 	"errors"
 	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/processes"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 func (conf *config) Sender() error {
@@ -21,15 +24,12 @@ func (conf *config) Sender() error {
 
 	// setup database connection for sender
 	var db = new(database.Database)
-	db.Make(conf.System.Role.Sender.Database,
-		conf.System.Role.Sender.DBip,
-		conf.System.Role.Sender.DBport,
-		conf.System.Role.Sender.DBuser,
-		conf.System.Role.Sender.DBpass,
-		conf.System.Role.Sender.DBname)
+	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
+		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname)
 
 	// get remote files
-	remoteFiles, err := conf.getRemoteDumps(conf.System.Role.Sender.DBname)
+	remoteFiles, err := processes.GetRemoteDumps(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port,
+		conf.System.User, conf.System.Pass, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -44,8 +44,15 @@ func (conf *config) Sender() error {
 	buffOverflowTimestamps := buff.Make(numOfBackups, conf.System.Role.Sender.DBname, sortedTimeSlice)
 	glog.Info(errors.New("ring buffer filled up to max_backups with existing database dumps"))
 
+	// convert array of time.Time into array of DB dump filenames
+	var buffOverflowFilenames []string
+	for _, elem := range buffOverflowTimestamps {
+		buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, elem))
+	}
+
 	// delete any remote files that don't fit into ring buffer
-	if err := conf.deleteRemoteDump(conf.System.Role.Sender.DBname, buffOverflowTimestamps); err != nil {
+	if err := processes.DeleteRemoteDump(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port, conf.System.User,
+		conf.System.Pass, conf.System.Role.Sender.DBname, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
 		glog.Error(err)
 	}
 	glog.Info(errors.New("database dumps on remote machine that didn't fit in ring buffer have been deleted"))
@@ -69,7 +76,8 @@ func (conf *config) Sender() error {
 				glog.Error(err)
 			}
 			if err == nil {
-				copiedDump, err := conf.transferDumpToRemote(mysqlDump)
+				copiedDump, err := processes.TransferDumpToRemote(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port,
+					conf.System.User, conf.System.Pass, conf.System.WorkingDir, mysqlDump)
 				if err != nil {
 					glog.Error(err)
 				}
@@ -78,7 +86,14 @@ func (conf *config) Sender() error {
 				// add to ring buffer and delete any overwritten file
 				buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
 				if !buffOverflowTimestamp.IsZero() {
-					if err := conf.deleteRemoteDump(conf.System.Role.Sender.DBname, []time.Time{buffOverflowTimestamp}); err != nil {
+
+					// convert array of time.Time into array of DB dump filenames
+					var buffOverflowFilenames []string
+					buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
+
+					if err := processes.DeleteRemoteDump(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port,
+						conf.System.User, conf.System.Pass, conf.System.Role.Sender.DBname, conf.System.WorkingDir,
+						buffOverflowFilenames); err != nil {
 						glog.Error(err)
 					}
 					glog.Info(errors.New("deleted old database dump: " + CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp)))
