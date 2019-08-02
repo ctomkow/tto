@@ -102,7 +102,7 @@ func RestoreDatabase(db *database.Database, workingDir string) (string, error) {
 
 func GetRemoteDumps(ip net.IPAddr, port uint16, user string, pass string, dbName string, workingDir string) (string, error) {
 
-	cmd := "find " + workingDir + " -name *" + dbName + "*.sql"
+	cmd := "find " + workingDir + " -name *'" + dbName + "*.sql'"
 
 	// connect to remote system
 	client := remote.ConnPrep(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
