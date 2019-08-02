@@ -13,7 +13,7 @@ type Command struct {
 	Status  bool
 }
 
-func (cmd *Command) MakeCmd() *Command {
+func (cmd *Command) MakeCmd() {
 
 	if len(os.Args) > 1 {
 		cmds := os.Args[1]
@@ -31,5 +31,4 @@ func (cmd *Command) MakeCmd() *Command {
 		}
 	}
 
-	return cmd
 }
