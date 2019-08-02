@@ -86,8 +86,8 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 	}()
 
 	// TODO: remove static timeout
-	// time.Duration is in nanoseconds. Default is 100 seconds
-	if waitTimeout(&wg, time.Duration(100000000000)) {
+	// time.Duration is in nanoseconds. Default is 1000 seconds
+	if waitTimeout(&wg, time.Duration(1000000000000)) {
 		return errors.New("timeout when upload files")
 	}
 
