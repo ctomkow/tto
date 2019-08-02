@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"github.com/ctomkow/tto/configuration"
 	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/processes"
 	"github.com/golang/glog"
@@ -14,7 +15,7 @@ import (
 	"syscall"
 )
 
-func (conf *config) Sender() error {
+func Sender(conf *configuration.Config) error {
 
 	// Set up channel on which to send signal notifications.
 	// We must use a buffered channel or risk missing the signal

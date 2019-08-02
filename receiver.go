@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"github.com/ctomkow/tto/configuration"
 	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/processes"
 	"github.com/fsnotify/fsnotify"
@@ -18,7 +19,7 @@ type lock struct {
 	restore bool
 }
 
-func (conf *config) Receiver() error {
+func Receiver(conf *configuration.Config) error {
 
 	// Setup channel on which to send signal notifications.
 	// We must use a buffered channel or risk missing the signal
