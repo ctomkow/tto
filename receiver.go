@@ -34,6 +34,9 @@ func (conf *config) Receiver() error {
 		conf.System.Role.Receiver.DBuser,
 		conf.System.Role.Receiver.DBpass,
 		conf.System.Role.Receiver.DBname)
+	if err := db.Open(); err != nil {
+		return err
+	}
 
 	// setup file watcher monitoring .latest.dump
 	watcher, err := fsnotify.NewWatcher()
