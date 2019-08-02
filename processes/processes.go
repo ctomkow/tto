@@ -102,7 +102,7 @@ func RestoreDatabase(db *database.Database, workingDir string) (string, error) {
 
 func GetRemoteDumps(ip net.IPAddr, port uint16, user string, pass string, dbName string, workingDir string) (string, error) {
 
-	cmd := "find " + workingDir + " -name *" + dbName + "*"
+	cmd := "find " + workingDir + " -name *" + dbName + "*.sql"
 
 	// connect to remote system
 	client := remote.ConnPrep(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
@@ -140,6 +140,7 @@ func TransferDumpToRemote(ip net.IPAddr, port uint16, user string, pass string, 
 		return "", err
 	}
 
+	// TODO: if copy fails (e.g. timeout) then the remaining steps don't complete! They should!
 	// copy dump to remote system
 	if err = client.NewSession(); err != nil {
 		return "", err
