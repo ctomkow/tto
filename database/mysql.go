@@ -81,7 +81,7 @@ func (db *Database) Dump(workingDir string) (string, error) {
 	var cmd *exec.Cmd
 
 	if strings.Compare(db.impl, "mysql") == 0 {
-		cmd = exec.Command("mysqldump", "--single-transaction", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name)
+		cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name)
 	} else {
 		return "", errors.New("unsupported database type")
 	}
