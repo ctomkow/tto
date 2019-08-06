@@ -128,3 +128,8 @@ func Sender(conf *configuration.Config) error {
 
 	return nil
 }
+
+func cronTriggered(c chan bool) {
+
+	c <- true
+}

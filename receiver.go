@@ -108,3 +108,12 @@ func Receiver(conf *configuration.Config) error {
 
 	return nil
 }
+
+func isWriteEvent(event fsnotify.Event) bool {
+
+	if event.Op&fsnotify.Write == fsnotify.Write {
+		return true
+	}
+
+	return false
+}
