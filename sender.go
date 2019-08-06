@@ -8,16 +8,18 @@ import (
 	"github.com/ctomkow/tto/configuration"
 	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/processes"
+	"github.com/ctomkow/tto/remote"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
 func Sender(conf *configuration.Config) error {
 
-	// Set up channel on which to send signal notifications.
+	// Setup channel on which to send signal notifications.
 	// We must use a buffered channel or risk missing the signal
 	// if we're not ready to receive when the signal is sent.
 	interrupt := make(chan os.Signal, 1)
@@ -28,9 +30,16 @@ func Sender(conf *configuration.Config) error {
 	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
 		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname)
 
+	// setup remote SSH connection
+	var remoteConnPtr = new(remote.SSH)
+	remoteConnPtr.Make(conf.System.Role.Sender.Dest.String(), strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
+		conf.System.User, conf.System.Pass)
+	if err := remoteConnPtr.Connect(); err != nil {
+		return err
+	}
+
 	// get remote files
-	remoteFiles, err := processes.GetRemoteDumps(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port,
-		conf.System.User, conf.System.Pass, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
+	remoteFiles, err := processes.GetRemoteDumps(remoteConnPtr, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -43,7 +52,13 @@ func Sender(conf *configuration.Config) error {
 		glog.Fatal(err)
 	}
 	buffOverflowTimestamps := buff.Make(numOfBackups, conf.System.Role.Sender.DBname, sortedTimeSlice)
-	glog.Info(errors.New("ring buffer filled up to max_backups with existing database dumps"))
+	glog.Info(errors.New("ring buffer filled upto max_backups ("+strconv.Itoa(numOfBackups)+") with existing remote db dumps: "))
+	if err != nil {
+		glog.Fatal(err)
+	}
+	for _, elem := range buff.queue[0:buff.size] {
+		glog.Info(errors.New(elem.name))
+	}
 
 	// convert array of time.Time into array of DB dump filenames
 	var buffOverflowFilenames []string
@@ -52,11 +67,13 @@ func Sender(conf *configuration.Config) error {
 	}
 
 	// delete any remote files that don't fit into ring buffer
-	if err := processes.DeleteRemoteDump(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port, conf.System.User,
-		conf.System.Pass, conf.System.Role.Sender.DBname, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+	if err := processes.DeleteRemoteDump(remoteConnPtr, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
 		glog.Error(err)
 	}
-	glog.Info(errors.New("database dumps on remote machine that didn't fit in ring buffer have been deleted"))
+	glog.Info(errors.New("the following remote db dumps that didn't fit in ring buffer were deleted: "))
+	for _, elem := range buffOverflowFilenames {
+		glog.Info(errors.New(elem))
+	}
 
 	// cron setup
 	cronChannel := make(chan bool)
@@ -77,12 +94,11 @@ func Sender(conf *configuration.Config) error {
 				glog.Error(err)
 			}
 			if err == nil {
-				copiedDump, err := processes.TransferDumpToRemote(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port,
-					conf.System.User, conf.System.Pass, conf.System.WorkingDir, mysqlDump)
+				copiedDump, err := processes.TransferDumpToRemote(remoteConnPtr, conf.System.WorkingDir, mysqlDump)
 				if err != nil {
 					glog.Error(err)
 				}
-				glog.Info(errors.New("dumped and copied over database: " + copiedDump))
+				glog.Info(errors.New("copied over db: " + copiedDump))
 
 				// add to ring buffer and delete any overwritten file
 				buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
@@ -92,12 +108,10 @@ func Sender(conf *configuration.Config) error {
 					var buffOverflowFilenames []string
 					buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
 
-					if err := processes.DeleteRemoteDump(conf.System.Role.Sender.Dest, conf.System.Role.Sender.Port,
-						conf.System.User, conf.System.Pass, conf.System.Role.Sender.DBname, conf.System.WorkingDir,
-						buffOverflowFilenames); err != nil {
+					if err := processes.DeleteRemoteDump(remoteConnPtr, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
 						glog.Error(err)
 					}
-					glog.Info(errors.New("deleted old database dump: " + CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp)))
+					glog.Info(errors.New("deleted old db: " + CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp)))
 				}
 			}
 

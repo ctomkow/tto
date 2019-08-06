@@ -7,11 +7,11 @@ import (
 	"bytes"
 )
 
-func (sc *SSH) RunCommand(command string) (string, error) {
+func (sh *SSH) RunCommand(command string) (string, error) {
 
 	var stdoutBuffer bytes.Buffer
-	sc.session.Stdout = &stdoutBuffer
-	if err := sc.session.Run(command); err != nil {
+	sh.session.Stdout = &stdoutBuffer
+	if err := sh.session.Run(command); err != nil {
 		return "", err
 	}
 

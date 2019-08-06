@@ -9,9 +9,7 @@ import (
 	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/remote"
 	"io/ioutil"
-	"net"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -100,87 +98,73 @@ func RestoreDatabase(db *database.Database, workingDir string) (string, error) {
 	return "", errors.New(".latest.dump and .latest.restore are the same")
 }
 
-func GetRemoteDumps(ip net.IPAddr, port uint16, user string, pass string, dbName string, workingDir string) (string, error) {
+func GetRemoteDumps(sh *remote.SSH, dbName string, workingDir string) (string, error) {
 
 	cmd := "find " + workingDir + " -name *'" + dbName + "*.sql'"
 
-	// connect to remote system
-	client := remote.ConnPrep(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
-	if err := client.Connect(); err != nil {
+	if err := sh.NewSession(); err != nil {
 		return "", err
 	}
-	if err := client.NewSession(); err != nil {
-		return "", err
-	}
-	result, err := client.RunCommand(cmd)
+	result, err := sh.RunCommand(cmd)
 	if err != nil {
-		return "", err
-	}
-	if err = client.CloseConnection(); err != nil {
 		return "", err
 	}
 
 	return result, nil
 }
 
-func TransferDumpToRemote(ip net.IPAddr, port uint16, user string, pass string, workingDir string, dump string) (string, error) {
-
-	// connect to remote system
-	client := remote.ConnPrep(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
-	if err := client.Connect(); err != nil {
-		return "", err
-	}
+func TransferDumpToRemote(sh *remote.SSH, workingDir string, dump string) (string, error) {
 
 	// add lock file on remote system for mysql dump
-	if err := client.NewSession(); err != nil {
+	if err := sh.NewSession(); err != nil {
 		return "", err
 	}
-	_, err := client.RunCommand("touch " + workingDir + "~" + dump + ".lock")
+	_, err := sh.RunCommand("touch " + workingDir + "~" + dump + ".lock")
 	if err != nil {
 		return "", err
 	}
 
 	// TODO: if copy fails (e.g. timeout) then the remaining steps don't complete! They should!
 	// copy dump to remote system
-	if err = client.NewSession(); err != nil {
+	if err = sh.NewSession(); err != nil {
 		return "", err
 	}
-	if err = client.CopyFile(dump, workingDir, "0600"); err != nil {
+	if err = sh.CopyFile(dump, workingDir, "0600"); err != nil {
 		return "", err
 	}
 
 	// remove lock file on remote system for mysql dump
-	if err = client.NewSession(); err != nil {
+	if err = sh.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("rm " + workingDir + "~" + dump + ".lock")
+	_, err = sh.RunCommand("rm " + workingDir + "~" + dump + ".lock")
 	if err != nil {
 		return "", err
 	}
 
 	// add lock file on remote system for .latest.dump
-	if err = client.NewSession(); err != nil {
+	if err = sh.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("touch " + workingDir + "~.latest.dump.lock")
+	_, err = sh.RunCommand("touch " + workingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
 	}
 
 	// update latest dump notes on remote system
-	if err = client.NewSession(); err != nil {
+	if err = sh.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("echo " + dump + " > " + workingDir + ".latest.dump")
+	_, err = sh.RunCommand("echo " + dump + " > " + workingDir + ".latest.dump")
 	if err != nil {
 		return "", err
 	}
 
 	// remove lock file on remote system for .latest.dump
-	if err = client.NewSession(); err != nil {
+	if err = sh.NewSession(); err != nil {
 		return "", err
 	}
-	_, err = client.RunCommand("rm " + workingDir + "~.latest.dump.lock")
+	_, err = sh.RunCommand("rm " + workingDir + "~.latest.dump.lock")
 	if err != nil {
 		return "", err
 	}
@@ -193,29 +177,19 @@ func TransferDumpToRemote(ip net.IPAddr, port uint16, user string, pass string, 
 	return dump, nil
 }
 
-func DeleteRemoteDump(ip net.IPAddr, port uint16, user string, pass string, dbName string, workingDir string, arrayOfFilenames []string) error {
-
-	// connect to remote system
-	client := remote.ConnPrep(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
-	if err := client.Connect(); err != nil {
-		return err
-	}
+func DeleteRemoteDump(sh *remote.SSH, workingDir string, arrayOfFilenames []string) error {
 
 	for _, elem := range arrayOfFilenames {
 
 		cmd := "rm " + workingDir + elem
 
-		if err := client.NewSession(); err != nil {
+		if err := sh.NewSession(); err != nil {
 			return err
 		}
-		_, err := client.RunCommand(cmd)
+		_, err := sh.RunCommand(cmd)
 		if err != nil {
 			return err
 		}
-	}
-
-	if err := client.CloseConnection(); err != nil {
-		return err
 	}
 
 	return nil

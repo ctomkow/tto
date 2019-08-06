@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func (sc *SSH) CopyFile(filename string, workingDir string, permissions string) error {
+func (sh *SSH) CopyFile(filename string, workingDir string, permissions string) error {
 
 	fd, err := os.Open(workingDir + filename)
 	if err != nil {
@@ -31,10 +31,10 @@ func (sc *SSH) CopyFile(filename string, workingDir string, permissions string) 
 	}
 	byteReader := bytes.NewReader(contentBytes)
 
-	return sc.copy(byteReader, workingDir+filename, permissions, int64(len(contentBytes)))
+	return sh.copy(byteReader, workingDir+filename, permissions, int64(len(contentBytes)))
 }
 
-func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size int64) error {
+func (sh *SSH) copy(r io.Reader, absolutePath string, permissions string, size int64) error {
 
 	filename := path.Base(absolutePath)
 	directory := path.Dir(absolutePath)
@@ -46,7 +46,7 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 
 	go func() {
 		defer wg.Done()
-		w, err := sc.session.StdinPipe()
+		w, err := sh.session.StdinPipe()
 		if err != nil {
 			errCh <- err
 			return
@@ -78,7 +78,7 @@ func (sc *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 
 	go func() {
 		defer wg.Done()
-		err := sc.session.Run(fmt.Sprintf("%s -qt %s", "/usr/bin/scp", directory))
+		err := sh.session.Run(fmt.Sprintf("%s -qt %s", "/usr/bin/scp", directory))
 		if err != nil {
 			errCh <- err
 			return

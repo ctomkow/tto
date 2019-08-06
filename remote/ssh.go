@@ -18,44 +18,36 @@ type SSH struct {
 }
 
 // TODO: support for keys
-func ConnPrep(ip string, port string, user string, pass string) *SSH {
+func (sh *SSH) Make(ip string, port string, user string, pass string) {
 
-	conf := &ssh.ClientConfig{
+	sh.remoteHostName = ip
+	sh.remoteHostPort = port
+	sh.user = user
+	sh.pass = pass
+
+	sh.config = &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(pass),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-
-	return &SSH{
-		remoteHostName: ip,
-		remoteHostPort: port,
-		user:           user,
-		pass:           pass,
-		config:         conf,
-	}
 }
 
-func (sc *SSH) Connect() error {
-	client, err := ssh.Dial("tcp", sc.remoteHostName+":"+sc.remoteHostPort, sc.config)
+func (sh *SSH) Connect() error {
+	client, err := ssh.Dial("tcp", sh.remoteHostName+":"+sh.remoteHostPort, sh.config)
 	if err != nil {
 		return err
 	}
 
-	sc.connection = client
-	sc.session, err = client.NewSession()
-	if err != nil {
-		return err
-	}
-
+	sh.connection = client
 	return nil
 }
 
-func (sc *SSH) NewSession() error {
+func (sh *SSH) NewSession() error {
 
 	var err error
-	sc.session, err = sc.connection.NewSession()
+	sh.session, err = sh.connection.NewSession()
 	if err != nil {
 		return err
 	}
@@ -63,16 +55,16 @@ func (sc *SSH) NewSession() error {
 	return nil
 }
 
-func (sc *SSH) CloseConnection() error {
-	if err := sc.connection.Close(); err != nil {
+func (sh *SSH) CloseConnection() error {
+	if err := sh.connection.Close(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (sc *SSH) CloseSession() error {
-	if err := sc.session.Close(); err != nil {
+func (sh *SSH) CloseSession() error {
+	if err := sh.session.Close(); err != nil {
 		return err
 	}
 
