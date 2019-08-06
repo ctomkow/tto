@@ -78,24 +78,23 @@ func RestoreDatabase(db *database.Database, workingDir string) (string, error) {
 		return "", err
 	}
 
-	// if dump and restoreDatabase not the same, then attempt to restoreDatabase the latestDump
-	if strings.Compare(latestDump, latestRestore) != 0 {
-
-		// TODO: error handling if database is DROP'd already... (not that it should be)
-		// restoreDatabase mysqldump into database
-		if err = db.Restore(workingDir + latestDump); err != nil {
-			return "", err
-		}
-
-		// update .latest.restore with restored dump filename
-		if err = ioutil.WriteFile(workingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
-			return "", err
-		}
-
-		return latestDump, nil
+	// if dump and restoreDatabase the same, then return error
+	if strings.Compare(latestDump, latestRestore) == 0 {
+		return "", errors.New(".latest.dump and .latest.restore are the same")
 	}
 
-	return "", errors.New(".latest.dump and .latest.restore are the same")
+	// TODO: error handling if database is DROP'd already... (not that it should be)
+	// restoreDatabase mysqldump into database
+	if err = db.Restore(workingDir + latestDump); err != nil {
+		return "", err
+	}
+
+	// update .latest.restore with restored dump filename
+	if err = ioutil.WriteFile(workingDir+".latest.restore", []byte(latestDump), 0600); err != nil {
+		return "", err
+	}
+
+	return latestDump, nil
 }
 
 func GetRemoteDumps(sh *remote.SSH, dbName string, workingDir string) (string, error) {
