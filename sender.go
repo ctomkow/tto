@@ -52,7 +52,7 @@ func Sender(conf *configuration.Config) error {
 		glog.Fatal(err)
 	}
 	buffOverflowTimestamps := buff.Make(numOfBackups, conf.System.Role.Sender.DBname, sortedTimeSlice)
-	glog.Info(errors.New("ring buffer filled upto max_backups ("+strconv.Itoa(numOfBackups)+") with existing remote db dumps: "))
+	glog.Info(errors.New("ring buffer filled upto max_backups (" + strconv.Itoa(numOfBackups) + ") with existing remote db dumps: "))
 	if err != nil {
 		glog.Fatal(err)
 	}
