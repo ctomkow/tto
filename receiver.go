@@ -29,12 +29,8 @@ func Receiver(conf *configuration.Config) error {
 
 	// setup database connection for receiver
 	var db = new(database.Database)
-	db.Make(conf.System.Role.Receiver.Database,
-		conf.System.Role.Receiver.DBip,
-		conf.System.Role.Receiver.DBport,
-		conf.System.Role.Receiver.DBuser,
-		conf.System.Role.Receiver.DBpass,
-		conf.System.Role.Receiver.DBname)
+	db.Make(conf.System.Role.Receiver.Database, conf.System.Role.Receiver.DBip, conf.System.Role.Receiver.DBport,
+		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname)
 	if err := db.Open(); err != nil {
 		return err
 	}
@@ -67,23 +63,24 @@ func Receiver(conf *configuration.Config) error {
 
 		// trigger on write event
 		case event = <-watcher.Events:
-			if isWriteEvent(event) {
-				if !lck.restore {
-
-					lck.restore = true
-
-					// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
-					go func() {
-						restoredDump, err := processes.RestoreDatabase(db, conf.System.WorkingDir)
-						if err != nil {
-							glog.Error(err)
-							restoreChan <- ""
-						}
-						restoreChan <- restoredDump
-					}()
-
-				} // else, silently skip and don't attempt to restoreDatabase database as it's currently in progress
+			if !isWriteEvent(event) {
+				break
 			}
+			if lck.restore {
+				break
+			}
+
+			lck.restore = true
+
+			// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
+			go func() {
+				restoredDump, err := processes.RestoreDatabase(db, conf.System.WorkingDir)
+				if err != nil {
+					glog.Error(err)
+					restoreChan <- ""
+				}
+				restoreChan <- restoredDump
+			}()
 
 		// trigger on dump restoreDatabase being finished
 		case restoredDump := <-restoreChan:
