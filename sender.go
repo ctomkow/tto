@@ -92,28 +92,31 @@ func Sender(conf *configuration.Config) error {
 			mysqlDump, err := db.Dump(conf.System.WorkingDir)
 			if err != nil {
 				glog.Error(err)
+				break
 			}
-			if err == nil {
-				copiedDump, err := processes.TransferDumpToRemote(remoteConnPtr, conf.System.WorkingDir, mysqlDump)
-				if err != nil {
-					glog.Error(err)
-				}
-				glog.Info(errors.New("copied over db: " + copiedDump))
 
-				// add to ring buffer and delete any overwritten file
-				buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
-				if !buffOverflowTimestamp.IsZero() {
-
-					// convert array of time.Time into array of DB dump filenames
-					var buffOverflowFilenames []string
-					buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
-
-					if err := processes.DeleteRemoteDump(remoteConnPtr, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
-						glog.Error(err)
-					}
-					glog.Info(errors.New("deleted old db: " + CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp)))
-				}
+			copiedDump, err := processes.TransferDumpToRemote(remoteConnPtr, conf.System.WorkingDir, mysqlDump)
+			if err != nil {
+				glog.Error(err)
+				break
 			}
+			glog.Info(errors.New("copied over db: " + copiedDump))
+
+			// add to ring buffer and delete any overwritten file
+			buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
+			if buffOverflowTimestamp.IsZero() {
+				break
+			}
+
+			// convert array of time.Time into array of DB dump filenames
+			var buffOverflowFilenames []string
+			buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
+
+			if err := processes.DeleteRemoteDump(remoteConnPtr, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+				glog.Error(err)
+				break
+			}
+			glog.Info(errors.New("deleted old db: " + CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp)))
 
 		// trigger on signal
 		case killSignal := <-interrupt:
