@@ -1,5 +1,5 @@
 # tto
-3-2-1 MySQL backup and sync
+3-2-1 MySQL backup and sync v0.1.0
 
 An asynchronous client-server app for synchronizing a MySQL database between two systems. The
 main use-case for developing this was to help maintain a hybrid primary / [primary / secondary] application 
