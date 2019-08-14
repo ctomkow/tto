@@ -9,6 +9,6 @@ services:
     image: tto:0.1
     restart: always
     volumes:
-      - /opt/tto/conf.d/conf.json:/etc/tto/conf.json
+      - /etc/tto/conf.json:/etc/tto/conf.json
       - /opt/tto:/opt/tto
 
