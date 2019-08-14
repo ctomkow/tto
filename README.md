@@ -17,24 +17,30 @@ deployment where replication was not possible.
 * "github.com/robfig/cron"
 * "github.com/takama/daemon"
 * "github.com/go-sql-driver/mysql"
+* "golang.org/x/crypto/ssh"
 
 ### Runtime Dependencies
 * mysqldump
 * InnoDB tables
 
+## Docker Install
+
+`docker-compose up -d`
+
 ## Install (on both systems)
 
-go build tto.go
+`go build tto.go`
 
-sudo ./tto install
+`sudo ./tto install`
 
 (edit /etc/conf.json)
 
-sudo systemctl start tto
+`sudo systemctl start tto`
 
 ## Uninstall
-sudo ./tto remove
 
-rm -r /opt/tto/
+`sudo ./tto remove`
 
-rm -r /etc/tto/
+`rm -r /opt/tto/`
+
+`rm -r /etc/tto/`
