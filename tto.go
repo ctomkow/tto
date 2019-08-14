@@ -31,21 +31,6 @@ func main() {
 		install()
 	}
 
-	// TODO: if conf.json is deleted, `tto remove` fails
-
-	var conf = new(configuration.Config)
-	if err := conf.LoadConfig("/etc/tto/" + *configFile); err != nil {
-		glog.Exit(err)
-	}
-
-	setupWorkingDir(conf)
-
-	setupPermissions(conf)
-
-	// TODO: run service as a user. The daemon package should set this in the systemd file!
-
-	daemonRole := conf.System.Type
-
 	// daemon setup and service start
 	srv, err := daemon.New(name, description)
 	if err != nil {
@@ -53,7 +38,7 @@ func main() {
 	}
 
 	service := &Service{srv}
-	status, err := service.Manage(conf, cmd, daemonRole)
+	status, err := service.Manage(cmd, configFile)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -63,7 +48,7 @@ func main() {
 
 // daemon manager
 
-func (srv *Service) Manage(conf *configuration.Config, cmd *configuration.Command, role string) (string, error) {
+func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (string, error) {
 
 	usage := "Usage: tto install | remove | start | stop | status"
 
@@ -84,7 +69,15 @@ func (srv *Service) Manage(conf *configuration.Config, cmd *configuration.Comman
 
 	}
 
-	switch role {
+	var conf = new(configuration.Config)
+	if err := conf.LoadConfig("/etc/tto/" + *configFile); err != nil {
+		glog.Exit(err)
+	}
+
+	setupWorkingDir(conf)
+	setupPermissions(conf)
+
+	switch conf.System.Type {
 	case "sender":
 		if err := Sender(conf); err != nil {
 			return "", err
@@ -96,7 +89,7 @@ func (srv *Service) Manage(conf *configuration.Config, cmd *configuration.Comman
 		}
 
 	default:
-		return "", errors.New("could not start daemon! unknown type: " + role)
+		return "", errors.New("could not start daemon! unknown type: " + conf.System.Type)
 	}
 
 	return usage, nil
