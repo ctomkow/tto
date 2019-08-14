@@ -4,10 +4,15 @@ services:
 
   tto:
     build:
+      args:
+        UID: ${USER_ID}
+        GID: ${GROUP_ID}
+        NAME: ${UNAME}
       context: "./"
     container_name: "tto"
     image: tto:0.1
     restart: always
+    user: ctomkow
     volumes:
       - /etc/tto/conf.json:/etc/tto/conf.json
       - /opt/tto:/opt/tto

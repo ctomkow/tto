@@ -3,6 +3,13 @@ FROM golang:1.12.8
 
 MAINTAINER Craig Tomkow "ctomkow@gmail.com"
 
+ARG UID
+ARG GID
+ARG NAME
+
+# app user
+RUN groupadd -g ${GID} ${NAME} && useradd -s /bin/bash -u ${UID} -g ${GID} ${NAME}
+
 RUN mkdir -p /go/src/github.com/ctomkow/tto
 WORKDIR /go/src/github.com/ctomkow/tto
 
