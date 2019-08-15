@@ -7,6 +7,10 @@ ARG UID
 ARG GID
 ARG NAME
 
+# system app dependency
+RUN apt-get update && apt-get install -y \
+	mariadb-client
+
 # app user
 RUN groupadd -g ${GID} ${NAME} && useradd -s /bin/bash -u ${UID} -g ${GID} ${NAME}
 
