@@ -23,23 +23,54 @@ deployment where replication was not possible.
 * mysqldump
 * InnoDB tables
 
+# Install
+
+The application needs to be installed on the primary and secondary systems. Each will be configured for their 
+respective roles (sender | receiver).
+
 ## Docker Install
+Currently, the docker install doesn't create a sample conf.json at runtime. See the sample conf.json included in the repo.
+
+`mkdir /etc/tto`
+
+`mkdir /opt/tto`
+
+`cp conf.json /etc/tto/`
+
+(edit /etc/tto/conf.json)
+
+`docker build --build-arg GID=` **myGID** ` --build-arg UID=` **myUID** ` --build-arg NAME=` **myUsername** ` -t tto .`
+
+`docker run -v /etc/tto/conf.json:/etc/tto/conf.json -v /opt/tto:/opt/tto tto`
+
+## Docker Compose
+
+`mkdir /etc/tto`
+
+`mkdir /opt/tto`
+
+`cp conf.json /etc/tto/`
+
+(edit /etc/tto/conf.json)
+
+(edit .env)
 
 `docker-compose up -d`
 
-## Install (on both systems)
+## OS Install
+(`go get` all build dependencies)
 
 `go build tto.go`
 
-`sudo ./tto install`
+`./tto install`
 
-(edit /etc/conf.json)
+(edit /etc/tto/conf.json)
 
-`sudo systemctl start tto`
+`systemctl start tto`
 
 ## Uninstall
 
-`sudo ./tto remove`
+`./tto remove`
 
 `rm -r /opt/tto/`
 
