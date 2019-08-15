@@ -25,7 +25,9 @@ func main() {
 	configFile := configuration.CliFlags()
 
 	var cmd = new(configuration.Command)
-	cmd.MakeCmd()
+	if err := cmd.MakeCmd(); err != nil {
+		glog.Fatal(err)
+	}
 
 	if cmd.Install {
 		install()
@@ -50,7 +52,7 @@ func main() {
 
 func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (string, error) {
 
-	usage := "Usage: tto install | remove | start | stop | status"
+	usage := "usage: tto install | remove | start | stop | status"
 
 	if cmd.Install {
 		return srv.Install()

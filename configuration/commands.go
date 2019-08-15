@@ -3,17 +3,20 @@
 
 package configuration
 
-import "os"
+import (
+	"errors"
+	"os"
+)
 
 type Command struct {
-	Install bool
-	Remove  bool
-	Start   bool
-	Stop    bool
-	Status  bool
+	Install 	bool
+	Remove  	bool
+	Start   	bool
+	Stop    	bool
+	Status  	bool
 }
 
-func (cmd *Command) MakeCmd() {
+func (cmd *Command) MakeCmd() error {
 
 	if len(os.Args) > 1 {
 		cmds := os.Args[1]
@@ -28,7 +31,10 @@ func (cmd *Command) MakeCmd() {
 			cmd.Stop = true
 		case "status":
 			cmd.Status = true
+		default:
+			return errors.New("invalid command: " + cmds)
 		}
 	}
 
+	return nil
 }
