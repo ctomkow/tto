@@ -11,9 +11,6 @@ import (
 type Command struct {
 	Install 	bool
 	Remove  	bool
-	Start   	bool
-	Stop    	bool
-	Status		bool
 	Fg 			bool
 }
 
@@ -28,12 +25,6 @@ func (cmd *Command) MakeCmd() error {
 			cmd.Install = true
 		case "remove":
 			cmd.Remove = true
-		case "start":
-			cmd.Start = true
-		case "stop":
-			cmd.Stop = true
-		case "status":
-			cmd.Status = true
 		case "fg":
 			cmd.Fg = true
 		default:

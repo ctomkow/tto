@@ -18,7 +18,7 @@ const (
 	// name of the service
 	name        = "tto"
 	description = "3-2-1 go!"
-	usage 		= "Usage: [flags] (install | remove | start | stop | status | fg)"
+	usage 		= "Usage: [flags] (install | remove | fg)"
 	flags		=
 		`
 	--help
@@ -32,14 +32,8 @@ const (
 		creates a daemon manager script depending on the service manager (SysV, Systemd, runit)
 	remove
 		deletes the daemon manager script that was installed
-	start
-		runs the daemon in the background
-	stop
-		gracefully stops the daemon
-	status
-		displays whether the daemon is running or not
 	fg
-		runs the program in the foreground. Needed for process managers to manage the app (docker, supervisord)
+		runs the program in the foreground. For process managers (docker, supervisord)
 	`
 )
 
@@ -81,19 +75,10 @@ func main() {
 func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (string, error) {
 
 	if cmd.Install {
-		return srv.Install()
+		return srv.Install("fg")
 
 	} else if cmd.Remove {
 		return srv.Remove()
-
-	} else if cmd.Start {
-		return srv.Start()
-
-	} else if cmd.Stop {
-		return srv.Stop()
-
-	} else if cmd.Status {
-		return srv.Status()
 
 	} else if cmd.Fg {
 		// pass through

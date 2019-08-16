@@ -14,9 +14,6 @@ var testArgs = []struct {
 }{
 	{[]string{"install"}, true},
 	{[]string{"remove"}, true},
-	{[]string{"start"}, true},
-	{[]string{"stop"}, true},
-	{[]string{"status"}, true},
 	{[]string{"fg"}, true},
 	{[]string{"derp"}, false},
 	{[]string{"dum", "dum"}, false},
@@ -41,18 +38,6 @@ func TestCommand_MakeCmd(t *testing.T) {
 			if argTest.expected != cmd.Remove {
 				t.Errorf("Input arg test failed; found, expected: %t, %t", cmd.Remove, argTest.expected)
 			}
-		case "start":
-			if argTest.expected != cmd.Start {
-				t.Errorf("Input arg test failed; found, expected: %t, %t", cmd.Start, argTest.expected)
-			}
-		case "stop":
-			if argTest.expected != cmd.Stop {
-				t.Errorf("Input arg test failed; found, expected: %t, %t", cmd.Stop, argTest.expected)
-			}
-		case "status":
-			if argTest.expected != cmd.Status {
-				t.Errorf("Input arg test failed; found, expected: %t, %t", cmd.Status, argTest.expected)
-			}
 		case "fg":
 			if argTest.expected != cmd.Fg {
 				t.Errorf("Input arg test failed; found, expected: %t, %t", cmd.Fg, argTest.expected)
@@ -71,7 +56,7 @@ func TestCommand_MakeCmd(t *testing.T) {
 			}
 		default:
 			if err == nil {
-				t.Errorf("Input arg test failed; found, expected: %t, %t", cmd.Status, argTest.expected)
+				t.Errorf("Input arg test failed; found, expected: %#v, %s", err, "nil err")
 			}
 		}
 	}
