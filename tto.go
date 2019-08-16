@@ -18,11 +18,39 @@ const (
 	// name of the service
 	name        = "tto"
 	description = "3-2-1 go!"
+	usage 		= "Usage: [flags] (install | remove | start | stop | status | fg)"
+	flags		=
+		`
+	--help
+		prints this message
+	--conf string
+		custom named configuration file. default is conf.json
+	`
+	commands	=
+	`
+	install
+		creates a daemon manager script depending on the service manager (SysV, Systemd, runit)
+	remove
+		deletes the daemon manager script that was installed
+	start
+		runs the daemon in the background
+	stop
+		gracefully stops the daemon
+	status
+		displays whether the daemon is running or not
+	fg
+		runs the program in the foreground. Needed for process managers to manage the app (docker, supervisord)
+	`
 )
 
 func main() {
 
-	configFile := configuration.CliFlags()
+	if err := configuration.SetLogToStderr(); err != nil {
+		glog.Fatal(err)
+	}
+	configFile := configuration.SetConfFlag()
+	configuration.SetUserUsage(usage, commands,  flags)
+	configuration.ParseFlags()
 
 	var cmd = new(configuration.Command)
 	if err := cmd.MakeCmd(); err != nil {
@@ -52,8 +80,6 @@ func main() {
 
 func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (string, error) {
 
-	usage := "usage: tto install | remove | start | stop | status"
-
 	if cmd.Install {
 		return srv.Install()
 
@@ -69,6 +95,11 @@ func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (stri
 	} else if cmd.Status {
 		return srv.Status()
 
+	} else if cmd.Fg {
+		// pass through
+		glog.Info("running in foreground")
+	} else {
+		glog.Fatal(usage)
 	}
 
 	var conf = new(configuration.Config)

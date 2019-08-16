@@ -24,6 +24,7 @@ RUN go get "github.com/takama/daemon"       && \
     go get "github.com/go-sql-driver/mysql" && \
     go get "golang.org/x/crypto/ssh"
 
+# compile
 COPY . /go/src/github.com/ctomkow/tto
 RUN go install
 
@@ -32,4 +33,4 @@ RUN mkdir -p /etc/tto && \
     mkdir -p /opt/tto
 RUN /go/bin/tto install
 
-CMD ["/go/bin/tto"]
+CMD ["/go/bin/tto", "fg"]

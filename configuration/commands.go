@@ -5,7 +5,7 @@ package configuration
 
 import (
 	"errors"
-	"os"
+	"flag"
 )
 
 type Command struct {
@@ -13,14 +13,17 @@ type Command struct {
 	Remove  	bool
 	Start   	bool
 	Stop    	bool
-	Status  	bool
+	Status		bool
+	Fg 			bool
 }
 
 func (cmd *Command) MakeCmd() error {
 
-	if len(os.Args) > 1 {
-		cmds := os.Args[1]
-		switch cmds {
+		if len(flag.Args()) > 1 {
+			return errors.New("only one command allowed, or flags should be before the command. See --help for more info")
+		}
+
+		switch flag.Arg(0) {
 		case "install":
 			cmd.Install = true
 		case "remove":
@@ -31,10 +34,11 @@ func (cmd *Command) MakeCmd() error {
 			cmd.Stop = true
 		case "status":
 			cmd.Status = true
+		case "fg":
+			cmd.Fg = true
 		default:
-			return errors.New("invalid command: " + cmds)
+			return errors.New("invalid command: " + flag.Arg(0))
 		}
-	}
 
 	return nil
 }

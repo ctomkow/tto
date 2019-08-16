@@ -5,19 +5,38 @@ package configuration
 
 import (
 	"flag"
-	"github.com/golang/glog"
+	"fmt"
 )
 
-// parse -conf flag and return as pointer
-func CliFlags() *string {
-
-	// override glog default logging to stderr so daemon managers can read the logs (docker, systemd)
-	if err := flag.Set("logtostderr", "true"); err != nil {
-		glog.Fatal(err)
-	}
-	// default conf file
-	confFilePtr := flag.String("conf", "conf.json", "name of conf file.")
+func ParseFlags() {
 
 	flag.Parse()
-	return confFilePtr
+}
+
+// set -conf flag and return pointer
+func SetConfFlag() *string {
+
+	// default conf file
+	confFlagPtr := flag.String("conf", "conf.json", "name of conf file.")
+
+	return confFlagPtr
+}
+
+func SetUserUsage(usage string, commands string, flags string) {
+
+	flag.Usage = func() {
+		fmt.Println(usage)
+		fmt.Print(flags)
+		fmt.Print(commands)
+	}
+}
+
+func SetLogToStderr() error {
+
+	// override glog default logging. Set to stderr so daemon managers can read the logs (docker, systemd)
+	if err := flag.Set("logtostderr", "true"); err != nil {
+		return err
+	}
+
+	return nil
 }
