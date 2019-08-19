@@ -26,9 +26,10 @@ func Sender(conf *configuration.Config) error {
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 	// setup database connection for sender
+	// default max db connections is 10
 	var db = new(database.Database)
 	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
-		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname)
+		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname, 10)
 
 	// setup remote SSH connection
 	var remoteConnPtr = new(remote.SSH)

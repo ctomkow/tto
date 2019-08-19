@@ -28,9 +28,10 @@ func Receiver(conf *configuration.Config) error {
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 	// setup database connection for receiver
+	// default max db connections is 10
 	var db = new(database.Database)
 	db.Make(conf.System.Role.Receiver.Database, conf.System.Role.Receiver.DBip, conf.System.Role.Receiver.DBport,
-		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname)
+		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname, 10)
 	if err := db.Open(); err != nil {
 		return err
 	}

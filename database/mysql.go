@@ -32,9 +32,11 @@ type Database struct {
 	username string
 	password string
 	name     string
+
+	maxConnections int
 }
 
-func (db *Database) Make(dbImpl string, ip net.IPAddr, port uint16, username string, password string, dbName string) {
+func (db *Database) Make(dbImpl string, ip net.IPAddr, port uint16, username string, password string, dbName string, maxConn int) {
 
 	db.impl = dbImpl
 	db.ip = ip
@@ -42,6 +44,7 @@ func (db *Database) Make(dbImpl string, ip net.IPAddr, port uint16, username str
 	db.username = username
 	db.password = password
 	db.name = dbName
+	db.maxConnections = maxConn
 }
 
 func (db *Database) Open() error {
@@ -57,6 +60,10 @@ func (db *Database) Open() error {
 	} else {
 		return errors.New("unsupported database type")
 	}
+
+	// set a static max number of concurrent connections allowed in the pool. 10 seems like a good number (see link), definitely not unlimited like the default!
+	// https://www.alexedwards.net/blog/configuring-sqldb
+	conn.SetMaxOpenConns(db.maxConnections)
 
 	err = conn.Ping()
 	if err != nil {
