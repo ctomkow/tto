@@ -1,0 +1,21 @@
+dist: xenial
+
+language: go
+
+go:
+  - 1.12.x
+
+git:
+  depth: 1
+
+install:
+  - go get "github.com/takama/daemon"
+  - go get "github.com/golang/glog"
+  - go get "github.com/robfig/cron"
+  - go get "github.com/fsnotify/fsnotify"
+  - go get "github.com/go-sql-driver/mysql"
+  - go get "golang.org/x/crypto/ssh"
+  
+script:
+  - go test ./...
+  - go install
