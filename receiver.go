@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/ctomkow/tto/configuration"
 	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/local"
 	"github.com/ctomkow/tto/processes"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
@@ -73,6 +74,15 @@ func Receiver(conf *configuration.Config) error {
 
 			lck.restore = true
 
+			// run exec_before
+			output, err := local.RunCommand(conf.System.Role.Receiver.ExecBefore)
+			if err != nil {
+				glog.Error(err)
+				lck.restore = false
+				break
+			}
+			glog.Info(errors.New(output))
+
 			// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 			go func() {
 				restoredDump, err := processes.RestoreDatabase(db, conf.System.WorkingDir)
@@ -85,12 +95,22 @@ func Receiver(conf *configuration.Config) error {
 
 		// trigger on dump restoreDatabase being finished
 		case restoredDump := <-restoreChan:
-			lck.restore = false
+
 			if restoredDump == "" {
-				glog.Error(errors.New("failed to restoreDatabase database"))
+				glog.Error(errors.New("failed to restore database"))
 			} else {
 				glog.Info(errors.New("restored database: " + restoredDump))
 			}
+
+			// run exec_after
+			output, err := local.RunCommand(conf.System.Role.Receiver.ExecAfter)
+			if err != nil {
+				glog.Error(err)
+			} else {
+				glog.Info(output)
+			}
+
+			lck.restore = false
 
 		// trigger on signal
 		case killSignal := <-interrupt:

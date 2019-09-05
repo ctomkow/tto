@@ -32,7 +32,15 @@
                 "db_port": 3306,
                 "db_user": "username",
                 "db_pass": "password",
-                "db_name": "databaseName"
+                "db_name": "databaseName",
+                "exec_before": [
+                    "echo",
+                    "i run before restoring the database"
+                ],
+                "exec_after": [
+                    "echo",
+                    "i run after restoring the database"
+                ]
             }
         }
     }

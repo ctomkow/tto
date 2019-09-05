@@ -36,6 +36,8 @@ type Config struct {
 				DBuser   string     `json:"db_user"`
 				DBpass   string     `json:"db_pass"`
 				DBname   string     `json:"db_name"`
+				ExecBefore []string `json:"exec_before"`
+				ExecAfter  []string `json:"exec_after"`
 			}
 		}
 	}
@@ -63,6 +65,8 @@ func (conf *Config) MakeConfig() {
 	conf.System.Role.Receiver.DBuser = `username`
 	conf.System.Role.Receiver.DBpass = `password`
 	conf.System.Role.Receiver.DBname = `databaseName`
+	conf.System.Role.Receiver.ExecBefore = []string{"echo", "i run before restoring the database"}
+	conf.System.Role.Receiver.ExecAfter = []string{"echo", "i run after restoring the database"}
 }
 
 func (conf *Config) LoadConfig(filename string) error {
