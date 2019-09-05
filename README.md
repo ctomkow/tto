@@ -1,12 +1,16 @@
 # tto
-3-2-1 MySQL backup and sync
 
-An asynchronous client-server app for synchronizing a MySQL database between two systems. The
-main use-case for developing this was to help maintain a hybrid primary / [primary / secondary] application 
+[![Build Status](https://travis-ci.org/ctomkow/tto.svg?branch=master)](https://travis-ci.org/ctomkow/tto)
+
+tto [t⋅toe]: _3-2-1 MySQL backup and sync_. Three backups, two copies on different storage, one located off-site.
+
+→	An asynchronous client-server app for synchronizing a MySQL database between two systems. In addition, it keeps a ring buffer of _X_ backups on the secondary system. 
+
+The main use-case for developing this was to help maintain a hybrid primary / [primary/secondary] application 
 deployment where replication was not possible.
 
 ### Use Cases
-* Replace cron scheduled shell scripts
+* Replace cron scheduled database backup shell scripts
 * Don't want to/can't setup MySQL replication
 * Enable a simple primary/secondary infrastructure across two data centers
 
@@ -39,7 +43,7 @@ Currently, the docker install doesn't create a sample conf.json at runtime. See 
 
 (edit /etc/tto/conf.json)
 
-`docker build --build-arg GID=` **myGID** ` --build-arg UID=` **myUID** ` --build-arg NAME=` **myUsername** ` -t tto .`
+`docker build --build-arg GID=` _myGID_ ` --build-arg UID=` _myUID_ ` --build-arg NAME=` _myUsername_ ` -t tto .`
 
 `docker run -v /etc/tto/conf.json:/etc/tto/conf.json -v /opt/tto:/opt/tto tto`
 

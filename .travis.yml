@@ -1,0 +1,29 @@
+dist: xenial
+
+language: go
+
+services:
+  - docker
+
+go:
+  - 1.12.x
+
+git:
+  depth: 1
+  
+# build containerized app
+before_install:
+  - docker build --build-arg GID=1000 --build-arg UID=1000 --build-arg NAME=tto -t tto .
+
+# build non-containerized app
+install:
+  - go get "github.com/takama/daemon"
+  - go get "github.com/golang/glog"
+  - go get "github.com/robfig/cron"
+  - go get "github.com/fsnotify/fsnotify"
+  - go get "github.com/go-sql-driver/mysql"
+  - go get "golang.org/x/crypto/ssh"
+  
+script:
+  - go test ./...
+  - go install
