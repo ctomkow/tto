@@ -97,11 +97,6 @@ func (db *Database) Dump(workingDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		if err := stdout.Close(); err != nil {
-			glog.Error(err)
-		}
-	}()
 
 	if err = cmd.Start(); err != nil {
 		return "", err
@@ -109,6 +104,10 @@ func (db *Database) Dump(workingDir string) (string, error) {
 
 	bytes, err := ioutil.ReadAll(stdout)
 	if err != nil {
+		return "", err
+	}
+
+	if err = cmd.Wait(); err != nil {
 		return "", err
 	}
 
