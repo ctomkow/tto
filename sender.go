@@ -26,26 +26,29 @@ func Sender(conf *configuration.Config) error {
 	//   - ring buffer for tracking database dumps
 	//   - ssh connection to remote host
 	//   - cron scheduling
+	//   - ticker to check on ssh connection
 
 	interrupt := SetupSignal()
 	db := SetupDatabase(conf)
 	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
 	remoteHost := setupSSH(conf)
-	cronChannel, cj, err := setupCron(conf.System.Role.Sender.Cron)
+	cronChannel, cronjob, err := setupCron(conf.System.Role.Sender.Cron)
 	if err != nil {
 		return err
 	}
+	ticker, testSSH := setupTicker(60)
 
 	// database dump prep and manipulation
 	//   - get the existing database dumps
 	//   - parse and sort them for only the timestamps
 	//   - add timestamps to ring buffer
 	//   - delete remote database dumps that didn't fit into ring buffer
+	//   - start ticker that monitors ssh connection
 
-	// TODO: retry 3 times if SSH connection fails
 	if err := remoteHost.Connect(); err != nil {
 		return err
 	}
+	remoteAlive := true
 	remoteDBdumps, err := processes.GetRemoteDumps(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		return err
@@ -57,14 +60,46 @@ func Sender(conf *configuration.Config) error {
 		glog.Error(err)
 	}
 
-	// start cron
-	cj.Start()
+	cronjob.Start()
+	startTicker(ticker, testSSH)
 
 	for {
 		select {
 
+		// test ssh connection
+		case <-testSSH:
+
+			err := remoteHost.NewSession()
+
+			if err == nil {
+				if err = remoteHost.CloseSession(); err != nil {
+					glog.Error("could not close test ssh session")
+				}
+				break
+			}
+			glog.Error("remote connection is down. backups are suspended until connection is re-established")
+
+			// try re-connecting 3 times with a sleep of 1 minutes in-between
+			for i := 1; i <= 3; i++ {
+				glog.Error("[" + strconv.Itoa(i) + "/3]" + " attempting to re-connect with remote")
+				if err := remoteHost.Connect(); err != nil {
+					glog.Error("failed to re-establish connection with remote")
+				} else {
+					remoteAlive = true
+					glog.Info("re-established connection with remote")
+					break // success!
+				}
+				remoteAlive = false
+				time.Sleep(10 * time.Second)
+			}
+
 		// cron trigger
 		case <-cronChannel:
+
+			if !remoteAlive {
+				glog.Error("remote is down")
+				break
+			}
 			mysqlDump, err := db.Dump(conf.System.WorkingDir)
 			if err != nil {
 				glog.Error(err)
@@ -92,6 +127,7 @@ func Sender(conf *configuration.Config) error {
 
 		// trigger on signal
 		case killSignal := <-interrupt:
+
 			glog.Error(killSignal)
 
 			if killSignal == os.Interrupt {
@@ -185,4 +221,21 @@ func setupCron(cronStatement string) (chan bool, *cron.Cron, error) {
 
 	glog.Info("db backup schedule: " + cronStatement)
 	return cronChannel, cj, nil
+}
+
+func setupTicker(secInterval time.Duration) (*time.Ticker, chan bool) {
+
+	ticker := time.NewTicker(secInterval * time.Second)
+	tickChannel := make(chan bool)
+
+	return ticker, tickChannel
+}
+
+func startTicker(ticker *time.Ticker, tickerChannel chan bool) {
+
+	go func() {
+		for _ = range ticker.C {
+			tickerChannel <- true
+		}
+	}()
 }
