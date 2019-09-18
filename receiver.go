@@ -6,14 +6,11 @@ package main
 import (
 	"errors"
 	"github.com/ctomkow/tto/configuration"
-	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/local"
 	"github.com/ctomkow/tto/processes"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"os"
-	"os/signal"
-	"syscall"
 )
 
 type lock struct {
@@ -22,43 +19,41 @@ type lock struct {
 
 func Receiver(conf *configuration.Config) error {
 
-	// Setup channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+	// setup various components
+	//   - signal interrupts
+	//   - local database
+	//   - file watcher
+	//   - restore lock
+	//   - restore channel for the restore database routine
 
-	// setup database connection for receiver
-	// default max db connections is 10
-	var db = new(database.Database)
-	db.Make(conf.System.Role.Receiver.Database, conf.System.Role.Receiver.DBip, conf.System.Role.Receiver.DBport,
-		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname, 10)
-	if err := db.Open(); err != nil {
-		return err
-	}
-
-	// setup file watcher monitoring .latest.dump
-	watcher, err := fsnotify.NewWatcher()
+	interrupt := SetupSignal()
+	db := SetupDatabase(conf)
+	watcher, err := setupFileWatcher()
 	if err != nil {
-		glog.Fatal(err)
+		return err
 	}
 	defer func() {
 		if err := watcher.Close(); err != nil {
 			glog.Exit(err)
 		}
 	}()
-
 	var lck = new(lock)
+	restoreChan := make(chan string)
 
-	// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching)
-	// https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
+	// create working components
+	//   - open database connection
+	//   - watch file for changes
+	//   - file change event variable
+
+	// TODO: try 3 times in failure
+	if err := db.Open(); err != nil {
+		return err
+	}
+	// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching). https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
 	if err = watcher.Add(conf.System.WorkingDir + ".latest.dump"); err != nil {
-		glog.Fatal(err)
+		return err
 	}
 	var event fsnotify.Event
-
-	// create channel for communicating with the database restoreDatabase routine
-	restoreChan := make(chan string)
 
 	for {
 		select {
@@ -97,9 +92,9 @@ func Receiver(conf *configuration.Config) error {
 		case restoredDump := <-restoreChan:
 
 			if restoredDump == "" {
-				glog.Error(errors.New("failed to restore database"))
+				glog.Error(errors.New("failed to restore db dump"))
 			} else {
-				glog.Info(errors.New("restored database: " + restoredDump))
+				glog.Info(errors.New("restored db dump: " + restoredDump))
 			}
 
 			// run exec_after
@@ -134,4 +129,14 @@ func isWriteEvent(event fsnotify.Event) bool {
 	}
 
 	return false
+}
+
+func setupFileWatcher() (*fsnotify.Watcher, error) {
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return watcher, err
+	}
+
+	return watcher, nil
 }

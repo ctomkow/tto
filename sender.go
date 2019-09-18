@@ -27,8 +27,8 @@ func Sender(conf *configuration.Config) error {
 	//   - ssh connection to remote host
 	//   - cron scheduling
 
-	interrupt := setupSignal()
-	db := setupDatabase(conf)
+	interrupt := SetupSignal()
+	db := SetupDatabase(conf)
 	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
 	remoteHost := setupSSH(conf)
 	cronChannel, cj, err := setupCron(conf.System.Role.Sender.Cron)
@@ -109,7 +109,7 @@ func cronTriggered(c chan bool) {
 	c <- true
 }
 
-func setupSignal() chan os.Signal {
+func SetupSignal() chan os.Signal {
 
 	// Setup channel on which to send signal notifications.
 	// We must use a buffered channel or risk missing the signal
@@ -120,7 +120,7 @@ func setupSignal() chan os.Signal {
 	return interrupt
 }
 
-func setupDatabase(conf *configuration.Config) *database.Database {
+func SetupDatabase(conf *configuration.Config) *database.Database {
 
 	// setup database connection for sender
 	// default max db connections is 10
