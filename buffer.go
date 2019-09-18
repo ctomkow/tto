@@ -23,11 +23,14 @@ type CircularQueue struct {
 	tail int
 }
 
-func (cq *CircularQueue) Make(size int, dbName string, dataToPopulate []time.Time) []time.Time {
+func (cq *CircularQueue) Make(size int) {
 
 	cq.size = size
 	cq.head = 0
 	cq.tail = 0
+}
+
+func (cq *CircularQueue) Populate(dbName string, dataToPopulate []time.Time) []time.Time {
 
 	var bufferOverflow []time.Time
 

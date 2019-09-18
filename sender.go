@@ -15,74 +15,49 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 func Sender(conf *configuration.Config) error {
 
-	// Setup channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+	// setup various components
+	//   - signal interrupts
+	//   - local database connection
+	//   - ring buffer for tracking database dumps
+	//   - ssh connection to remote host
+	//   - cron scheduling
 
-	// setup database connection for sender
-	// default max db connections is 10
-	var db = new(database.Database)
-	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
-		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname, 10)
-
-	// setup remote SSH connection
-	var remoteConnPtr = new(remote.SSH)
-	remoteConnPtr.Make(conf.System.Role.Sender.Dest.String(), strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
-		conf.System.User, conf.System.Pass)
-	if err := remoteConnPtr.Connect(); err != nil {
+	interrupt := setupSignal()
+	db := setupDatabase(conf)
+	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
+	remoteHost := setupSSH(conf)
+	cronChannel, cj, err := setupCron(conf.System.Role.Sender.Cron)
+	if err != nil {
 		return err
 	}
 
-	// get remote files
-	remoteFiles, err := processes.GetRemoteDumps(remoteConnPtr, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
-	if err != nil {
-		glog.Fatal(err)
-	}
+	// database dump prep and manipulation
+	//   - get the existing database dumps
+	//   - parse and sort them for only the timestamps
+	//   - add timestamps to ring buffer
+	//   - delete remote database dumps that didn't fit into ring buffer
 
-	// init ring buffer with existing files
-	var buff = new(CircularQueue)
-	sortedTimeSlice := ParseDbDumpFilename(remoteFiles)
-	numOfBackups := conf.System.Role.Sender.MaxBackups
+	// TODO: retry 3 times if SSH connection fails
+	if err := remoteHost.Connect(); err != nil {
+		return err
+	}
+	remoteDBdumps, err := processes.GetRemoteDumps(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
-		glog.Fatal(err)
+		return err
 	}
-	buffOverflowTimestamps := buff.Make(numOfBackups, conf.System.Role.Sender.DBname, sortedTimeSlice)
-	glog.Info(errors.New("ring buffer filled upto max_backups (" + strconv.Itoa(numOfBackups) + ") with existing remote db dumps: "))
-	if err != nil {
-		glog.Fatal(err)
-	}
-	for _, elem := range buff.queue[0:buff.size] {
-		glog.Info(errors.New(elem.name))
-	}
-
-	// convert array of time.Time into array of DB dump filenames
-	var buffOverflowFilenames []string
-	for _, elem := range buffOverflowTimestamps {
-		buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, elem))
-	}
-
-	// delete any remote files that don't fit into ring buffer
-	if err := processes.DeleteRemoteDump(remoteConnPtr, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+	sortedDbDumpTimestamps := ParseDbDumpFilename(remoteDBdumps)
+	buffOverflowTimestamps := fillBuffer(buff, conf.System.Role.Sender.DBname, sortedDbDumpTimestamps)
+	buffOverflowDbDumpNames := buildDbDumpNames(conf.System.Role.Sender.DBname, buffOverflowTimestamps)
+	if err := processes.DeleteRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowDbDumpNames); err != nil {
 		glog.Error(err)
 	}
-	glog.Info(errors.New("the following remote db dumps that didn't fit in ring buffer were deleted: "))
-	for _, elem := range buffOverflowFilenames {
-		glog.Info(errors.New(elem))
-	}
 
-	// cron setup
-	cronChannel := make(chan bool)
-	cj := cron.New()
-	err = cj.AddFunc(conf.System.Role.Sender.Cron, func() { cronTriggered(cronChannel) })
-	if err != nil {
-		glog.Fatal(err)
-	}
+	// start cron
 	cj.Start()
 
 	for {
@@ -96,28 +71,24 @@ func Sender(conf *configuration.Config) error {
 				break
 			}
 
-			copiedDump, err := processes.TransferDumpToRemote(remoteConnPtr, conf.System.WorkingDir, mysqlDump)
+			err = processes.TransferDumpToRemote(remoteHost, conf.System.WorkingDir, mysqlDump)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			glog.Info(errors.New("copied over db: " + copiedDump))
 
-			// add to ring buffer and delete any overwritten file
 			buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
 			if buffOverflowTimestamp.IsZero() {
 				break
 			}
 
-			// convert array of time.Time into array of DB dump filenames
+			// delete the dump that get's kicked out of the ring buffer
 			var buffOverflowFilenames []string
 			buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
-
-			if err := processes.DeleteRemoteDump(remoteConnPtr, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+			if err := processes.DeleteRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
 				glog.Error(err)
 				break
 			}
-			glog.Info(errors.New("deleted old db: " + CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp)))
 
 		// trigger on signal
 		case killSignal := <-interrupt:
@@ -136,4 +107,82 @@ func Sender(conf *configuration.Config) error {
 func cronTriggered(c chan bool) {
 
 	c <- true
+}
+
+func setupSignal() chan os.Signal {
+
+	// Setup channel on which to send signal notifications.
+	// We must use a buffered channel or risk missing the signal
+	// if we're not ready to receive when the signal is sent.
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+	return interrupt
+}
+
+func setupDatabase(conf *configuration.Config) *database.Database {
+
+	// setup database connection for sender
+	// default max db connections is 10
+	var db = new(database.Database)
+	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
+		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname, 10)
+
+	return db
+}
+
+func setupSSH(conf *configuration.Config) *remote.SSH {
+
+	// setup remote SSH connection
+	var remoteConnPtr = new(remote.SSH)
+	remoteConnPtr.Make(conf.System.Role.Sender.Dest.String(), strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
+		conf.System.User, conf.System.Pass)
+
+	glog.Info("receiver host: " + conf.System.Role.Sender.Dest.String())
+	return remoteConnPtr
+}
+
+func setupBuffer(maxSize int) *CircularQueue {
+
+	var buff = new(CircularQueue)
+	buff.Make(maxSize)
+
+	glog.Info("maximum backups: " + strconv.Itoa(maxSize))
+	return buff
+}
+
+func fillBuffer(buff *CircularQueue, databaseName string, sortedTimestamps []time.Time) []time.Time {
+
+	buffOverflowTimestamps := buff.Populate(databaseName, sortedTimestamps)
+
+	for _, elem := range buff.queue[0:buff.size] {
+		glog.Info("existing backups: " + elem.name)
+	}
+
+	return buffOverflowTimestamps
+}
+
+func buildDbDumpNames(databaseName string, times []time.Time) []string {
+
+	// convert array of time.Time into array of DB dump filenames
+	var dbDumpNames []string
+	for _, timestamp := range times {
+		dbDumpNames = append(dbDumpNames, CompileDbDumpFilename(databaseName, timestamp))
+	}
+
+	return dbDumpNames
+}
+
+func setupCron(cronStatement string) (chan bool, *cron.Cron, error) {
+
+	// cron setup
+	cronChannel := make(chan bool)
+	cj := cron.New()
+	err := cj.AddFunc(cronStatement, func() { cronTriggered(cronChannel) })
+	if err != nil {
+		return cronChannel, cj, err
+	}
+
+	glog.Info("db backup schedule: " + cronStatement)
+	return cronChannel, cj, nil
 }

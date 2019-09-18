@@ -5,6 +5,7 @@ package processes
 
 import (
 	"github.com/ctomkow/tto/remote"
+	"github.com/golang/glog"
 	"os"
 )
 
@@ -23,75 +24,76 @@ func GetRemoteDumps(sh *remote.SSH, dbName string, workingDir string) (string, e
 	return result, nil
 }
 
-func TransferDumpToRemote(sh *remote.SSH, workingDir string, dump string) (string, error) {
+func TransferDumpToRemote(sh *remote.SSH, workingDir string, dump string) error {
 
 	// add lock file on remote system for mysql dump
 	if err := sh.NewSession(); err != nil {
-		return "", err
+		return err
 	}
 	_, err := sh.RunCommand("touch " + workingDir + "~" + dump + ".lock")
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// TODO: if copy fails (e.g. timeout) then the remaining steps don't complete! They should!
 	// copy dump to remote system
 	if err = sh.NewSession(); err != nil {
-		return "", err
+		return err
 	}
 	if err = sh.CopyFile(dump, workingDir, "0600"); err != nil {
-		return "", err
+		return err
 	}
 
 	// remove lock file on remote system for mysql dump
 	if err = sh.NewSession(); err != nil {
-		return "", err
+		return err
 	}
 	_, err = sh.RunCommand("rm " + workingDir + "~" + dump + ".lock")
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// add lock file on remote system for .latest.dump
 	if err = sh.NewSession(); err != nil {
-		return "", err
+		return err
 	}
 	_, err = sh.RunCommand("touch " + workingDir + "~.latest.dump.lock")
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// update latest dump notes on remote system
 	if err = sh.NewSession(); err != nil {
-		return "", err
+		return err
 	}
 	_, err = sh.RunCommand("echo " + dump + " > " + workingDir + ".latest.dump")
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// remove lock file on remote system for .latest.dump
 	if err = sh.NewSession(); err != nil {
-		return "", err
+		return err
 	}
 	_, err = sh.RunCommand("rm " + workingDir + "~.latest.dump.lock")
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// delete local dump
 	if err = removeFile(workingDir + dump); err != nil {
-		return "", err
+		return err
 	}
 
-	return dump, nil
+	glog.Info("transferred db dump: " + dump)
+	return nil
 }
 
-func DeleteRemoteDump(sh *remote.SSH, workingDir string, arrayOfFilenames []string) error {
+func DeleteRemoteDumps(sh *remote.SSH, workingDir string, arrayOfFilenames []string) error {
 
-	for _, elem := range arrayOfFilenames {
+	for _, filename := range arrayOfFilenames {
 
-		cmd := "rm " + workingDir + elem
+		cmd := "rm " + workingDir + filename
 
 		if err := sh.NewSession(); err != nil {
 			return err
@@ -100,6 +102,7 @@ func DeleteRemoteDump(sh *remote.SSH, workingDir string, arrayOfFilenames []stri
 		if err != nil {
 			return err
 		}
+		glog.Info("deleted db dump: " + filename)
 	}
 
 	return nil
