@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"github.com/ctomkow/tto/configuration"
+	"github.com/ctomkow/tto/database"
 	"github.com/ctomkow/tto/local"
 	"github.com/ctomkow/tto/processes"
 	"github.com/fsnotify/fsnotify"
@@ -27,7 +28,7 @@ func Receiver(conf *configuration.Config) error {
 	//   - restore channel for the restore database routine
 
 	interrupt := SetupSignal()
-	db := SetupDatabase(conf)
+	db := setupReceiverDatabase(conf)
 	watcher, err := setupFileWatcher()
 	if err != nil {
 		return err
@@ -139,4 +140,15 @@ func setupFileWatcher() (*fsnotify.Watcher, error) {
 	}
 
 	return watcher, nil
+}
+
+func setupReceiverDatabase(conf *configuration.Config) *database.Database {
+
+	// setup database connection for sender
+	// default max db connections is 10
+	var db = new(database.Database)
+	db.Make(conf.System.Role.Receiver.Database, conf.System.Role.Receiver.DBip, conf.System.Role.Receiver.DBport,
+		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname, 10)
+
+	return db
 }

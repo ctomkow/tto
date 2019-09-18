@@ -29,7 +29,7 @@ func Sender(conf *configuration.Config) error {
 	//   - ticker to check on ssh connection
 
 	interrupt := SetupSignal()
-	db := SetupDatabase(conf)
+	db := setupSenderDatabase(conf)
 	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
 	remoteHost := setupSSH(conf)
 	cronChannel, cronjob := setupCron(conf.System.Role.Sender.Cron)
@@ -153,7 +153,7 @@ func SetupSignal() chan os.Signal {
 	return interrupt
 }
 
-func SetupDatabase(conf *configuration.Config) *database.Database {
+func setupSenderDatabase(conf *configuration.Config) *database.Database {
 
 	// setup database connection for sender
 	// default max db connections is 10
