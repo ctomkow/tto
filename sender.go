@@ -32,10 +32,7 @@ func Sender(conf *configuration.Config) error {
 	db := SetupDatabase(conf)
 	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
 	remoteHost := setupSSH(conf)
-	cronChannel, cronjob, err := setupCron(conf.System.Role.Sender.Cron)
-	if err != nil {
-		return err
-	}
+	cronChannel, cronjob := setupCron(conf.System.Role.Sender.Cron)
 	ticker, testSSH := setupTicker(60)
 
 	// database dump prep and manipulation
@@ -209,18 +206,15 @@ func buildDbDumpNames(databaseName string, times []time.Time) []string {
 	return dbDumpNames
 }
 
-func setupCron(cronStatement string) (chan bool, *cron.Cron, error) {
+func setupCron(cronStatement string) (chan bool, *cron.Cron) {
 
 	// cron setup
 	cronChannel := make(chan bool)
 	cj := cron.New()
-	err := cj.AddFunc(cronStatement, func() { cronTriggered(cronChannel) })
-	if err != nil {
-		return cronChannel, cj, err
-	}
+	cj.AddFunc(cronStatement, func() { cronTriggered(cronChannel) })
 
 	glog.Info("db backup schedule: " + cronStatement)
-	return cronChannel, cj, nil
+	return cronChannel, cj
 }
 
 func setupTicker(secInterval time.Duration) (*time.Ticker, chan bool) {
