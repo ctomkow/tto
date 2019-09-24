@@ -97,19 +97,19 @@ func Sender(conf *configuration.Config) error {
 				glog.Error("remote is down")
 				break
 			}
-			mysqlDump, err := db.Dump(conf.System.WorkingDir)
+			dumpBuffer, dumpName, err := db.Dump(conf.System.WorkingDir)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
 
-			err = processes.TransferDumpToRemote(remoteHost, conf.System.WorkingDir, mysqlDump)
+			err = processes.TransferDumpToRemote(remoteHost, conf.System.WorkingDir, dumpName, dumpBuffer)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
 
-			buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(mysqlDump)[0])
+			buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(dumpName)[0])
 			if buffOverflowTimestamp.IsZero() {
 				break
 			}

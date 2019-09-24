@@ -11,27 +11,15 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"io"
-	"io/ioutil"
-	"os"
 	"path"
 	"sync"
 	"time"
 )
 
-func (sh *SSH) CopyFile(filename string, workingDir string, permissions string) error {
+func (sh *SSH) CopyBytes(byteBuffer []byte, filename string, workingDir string, permissions string) error {
 
-	fd, err := os.Open(workingDir + filename)
-	if err != nil {
-		return err
-	}
-
-	contentBytes, err := ioutil.ReadAll(fd)
-	if err != nil {
-		return err
-	}
-	byteReader := bytes.NewReader(contentBytes)
-
-	return sh.copy(byteReader, workingDir+filename, permissions, int64(len(contentBytes)))
+	byteReader := bytes.NewReader(byteBuffer)
+	return sh.copy(byteReader, workingDir+filename, permissions, int64(len(byteBuffer)))
 }
 
 func (sh *SSH) copy(r io.Reader, absolutePath string, permissions string, size int64) error {
