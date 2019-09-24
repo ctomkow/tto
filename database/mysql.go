@@ -75,7 +75,7 @@ func (db *Database) Open() error {
 	return nil
 }
 
-func (db *Database) Dump(workingDir string) (string, error) {
+func (db *Database) Dump(workingDir string) ([]byte, string, error) {
 
 	// YYYYMMDDhhmmss
 	currentTime := time.Now().UTC().Format("20060102150405") //TODO: remove static time format (or move it), buffer also relies on this format
@@ -90,32 +90,28 @@ func (db *Database) Dump(workingDir string) (string, error) {
 	if strings.Compare(db.impl, "mysql") == 0 {
 		cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name)
 	} else {
-		return "", errors.New("unsupported database type")
+		return nil, "" , errors.New("unsupported database type")
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", err
+		return nil, "" , err
 	}
 
 	if err = cmd.Start(); err != nil {
-		return "", err
+		return nil, "" , err
 	}
 
-	bytes, err := ioutil.ReadAll(stdout)
+	byteBuffer, err := ioutil.ReadAll(stdout)
 	if err != nil {
-		return "", err
+		return nil, "" , err
 	}
 
 	if err = cmd.Wait(); err != nil {
-		return "", err
+		return nil, "" , err
 	}
 
-	if err = ioutil.WriteFile(workingDir+sqlFile, bytes, 0644); err != nil {
-		return "", err
-	}
-
-	return sqlFile, nil
+	return byteBuffer, sqlFile, nil
 }
 
 func (db *Database) Restore(dump string) error {
