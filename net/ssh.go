@@ -17,7 +17,7 @@ type SSH struct {
 	user           string
 	pass           string
 	config         *ssh.ClientConfig
-	session        *ssh.Session
+	Session        *ssh.Session
 	connection     *ssh.Client
 }
 
@@ -52,7 +52,7 @@ func (sh *SSH) Connect() error {
 func (sh *SSH) NewSession() error {
 
 	var err error
-	sh.session, err = sh.connection.NewSession()
+	sh.Session, err = sh.connection.NewSession()
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (sh *SSH) CloseConnection() error {
 }
 
 func (sh *SSH) CloseSession() error {
-	if err := sh.session.Close(); err != nil {
+	if err := sh.Session.Close(); err != nil {
 		return err
 	}
 
@@ -78,7 +78,7 @@ func (sh *SSH) CloseSession() error {
 
 func (sh *SSH) GetSession() *ssh.Session {
 
-	return sh.session
+	return sh.Session
 }
 
 func (sh *SSH) TestConnection() error {
@@ -87,7 +87,7 @@ func (sh *SSH) TestConnection() error {
 		return err
 	}
 	if err := sh.CloseSession(); err != nil {
-		return errors.New("could not close test ssh session")
+		return errors.New("could not close test ssh Session")
 	}
 
 	return nil

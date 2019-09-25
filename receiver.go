@@ -8,7 +8,6 @@ import (
 	"github.com/ctomkow/tto/backup"
 	"github.com/ctomkow/tto/conf"
 	"github.com/ctomkow/tto/db"
-	"github.com/ctomkow/tto/exec"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"os"
@@ -26,6 +25,7 @@ func Receiver(conf *conf.Config) error {
 	//   - file watcher
 	//   - restore lock
 	//   - restore channel for the restore database routine
+	//   - execute commands
 
 	interrupt := SetupSignal()
 	db := setupReceiverDatabase(conf)
@@ -40,6 +40,7 @@ func Receiver(conf *conf.Config) error {
 	}()
 	var lck = new(lock)
 	restoreChan := make(chan string)
+	ex := setupExec()
 
 	// create working components
 	//   - open database connection
@@ -71,7 +72,7 @@ func Receiver(conf *conf.Config) error {
 			lck.restore = true
 
 			// run exec_before
-			output, err := exec.LocalCmd(conf.System.Role.Receiver.ExecBefore)
+			output, err := ex.LocalCmd(conf.System.Role.Receiver.ExecBefore)
 			if err != nil {
 				glog.Error(err)
 				lck.restore = false
@@ -99,7 +100,7 @@ func Receiver(conf *conf.Config) error {
 			}
 
 			// run exec_after
-			output, err := exec.LocalCmd(conf.System.Role.Receiver.ExecAfter)
+			output, err := ex.LocalCmd(conf.System.Role.Receiver.ExecAfter)
 			if err != nil {
 				glog.Error(err)
 			} else {

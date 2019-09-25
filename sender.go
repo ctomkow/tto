@@ -8,6 +8,7 @@ import (
 	"github.com/ctomkow/tto/backup"
 	"github.com/ctomkow/tto/conf"
 	"github.com/ctomkow/tto/db"
+	"github.com/ctomkow/tto/exec"
 	"github.com/ctomkow/tto/net"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
@@ -34,6 +35,7 @@ func Sender(conf *conf.Config) error {
 	remoteHost := setupSSH(conf)
 	cronChannel, cronjob := setupCron(conf.System.Role.Sender.Cron)
 	ticker, testSSH := setupTicker(60)
+	ex := setupExec()
 
 	// database dump prep and manipulation
 	//   - get the existing backups
@@ -47,7 +49,7 @@ func Sender(conf *conf.Config) error {
 		return err
 	}
 	remoteAlive := true
-	backupsAsString, err := backup.GetBackups(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
+	backupsAsString, err := backup.GetBackups(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir, ex)
 	if err != nil {
 		return err
 	}
@@ -57,7 +59,7 @@ func Sender(conf *conf.Config) error {
 	}
 	backups = StripPath(conf.System.WorkingDir, backups)
 	expiredDumps := fillBuffer(buff, SortBackups(backups))
-	if err := backup.Delete(remoteHost, conf.System.WorkingDir, expiredDumps); err != nil {
+	if err := backup.Delete(remoteHost, conf.System.WorkingDir, expiredDumps, ex); err != nil {
 		glog.Error(err)
 	}
 	cronjob.Start()
@@ -89,12 +91,12 @@ func Sender(conf *conf.Config) error {
 				glog.Error("remote is down")
 				break
 			}
-			buf, backupName, err := db.Dump(conf.System.WorkingDir)
+			streamingOutput, backupName, err := ex.MySqlDump(db, conf.System.WorkingDir)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, backupName, buf)
+			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, backupName, streamingOutput, ex)
 			if err != nil {
 				glog.Error(err)
 				break
@@ -103,7 +105,7 @@ func Sender(conf *conf.Config) error {
 			if expiredDump == "" {
 				break
 			}
-			if err := backup.Delete(remoteHost, conf.System.WorkingDir, []string{expiredDump}); err != nil {
+			if err := backup.Delete(remoteHost, conf.System.WorkingDir, []string{expiredDump}, ex); err != nil {
 				glog.Error(err)
 				break
 			}
@@ -207,4 +209,10 @@ func startTicker(ticker *time.Ticker, tickerChannel chan bool) {
 			tickerChannel <- true
 		}
 	}()
+}
+
+func setupExec() *exec.Exec {
+
+	var ex = new(exec.Exec)
+	return ex
 }

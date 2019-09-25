@@ -3,12 +3,13 @@
 
 // Modified from copyrighted work (Mozilla Public License 2.0) by Bram Vandenbogaerde (https://github.com/bramvdbogaerde/go-scp)
 
-package net
+package netio
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ctomkow/tto/exec"
+	"github.com/ctomkow/tto/net"
 	"github.com/golang/glog"
 	"io"
 	"path"
@@ -16,20 +17,22 @@ import (
 	"time"
 )
 
-func (sh *SSH) CopyBytes(byteBuffer []byte, filename string, workingDir string, permissions string) error {
+func Copy(byteBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *net.SSH) error {
 
 	// ensure a new session is created before acting!
 	if err := sh.NewSession(); err != nil {
 		return err
 	}
 
-	byteReader := bytes.NewReader(byteBuffer)
-	return sh.copy(byteReader, workingDir+filename, permissions, int64(len(byteBuffer)))
+	// since i don't know the size of the dump, set a static max to 100GB (107374182400 bytes)
+	if err := copy(*byteBuffer, workingDir+filename, permissions, 107374182400, ex, sh); err != nil {
+		glog.Error(err)
+	}
+
+	return nil
 }
 
-func (sh *SSH) copy(r io.Reader, absolutePath string, permissions string, size int64) error {
-
-	// TODO: create new session in here somewhere!!! Always new new session after consuming one!
+func copy(r io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *net.SSH) error {
 
 	filename := path.Base(absolutePath)
 	directory := path.Dir(absolutePath)
@@ -41,7 +44,7 @@ func (sh *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 
 	go func() {
 		defer wg.Done()
-		w, err := sh.session.StdinPipe()
+		w, err := sh.Session.StdinPipe()
 		if err != nil {
 			errCh <- err
 			return
@@ -69,21 +72,28 @@ func (sh *SSH) copy(r io.Reader, absolutePath string, permissions string, size i
 			errCh <- err
 			return
 		}
+
 	}()
 
 	go func() {
 		defer wg.Done()
-		err := sh.session.Run(fmt.Sprintf("%s -qt %s", "/usr/bin/scp", directory))
+		err := sh.Session.Run(fmt.Sprintf("%s -qt %s", "/usr/bin/scp", directory))
 		if err != nil {
-			errCh <- err
-			return
+			// The SCP process is existing with code 1 because the session is being forcefully closed after transfer is complete
+			//   SCP would properly close if we specify a correct file size, but we don't know that because we are streaming mysqldump
+			//   Therefore it is set to a max of 100GB
+			//   Consequently, we cannot handle an error case here :/
+
 		}
 	}()
 
-	// TODO: remove static timeout
 	// time.Duration is in nanoseconds. Default is 1000 seconds
 	if waitTimeout(&wg, time.Duration(1000000000000)) {
 		return errors.New("timeout when upload files")
+	}
+
+	if err:= ex.Cmd.Wait(); err != nil {
+		return err
 	}
 
 	close(errCh)
