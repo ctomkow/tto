@@ -7,8 +7,8 @@ import (
 	"errors"
 	"github.com/ctomkow/tto/configuration"
 	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/net"
 	"github.com/ctomkow/tto/processes"
-	"github.com/ctomkow/tto/remote"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
 	"os"
@@ -164,10 +164,10 @@ func setupSenderDatabase(conf *configuration.Config) *database.Database {
 	return db
 }
 
-func setupSSH(conf *configuration.Config) *remote.SSH {
+func setupSSH(conf *configuration.Config) *net.SSH {
 
 	// setup remote SSH connection
-	var remoteConnPtr = new(remote.SSH)
+	var remoteConnPtr = new(net.SSH)
 	remoteConnPtr.Make(conf.System.Role.Sender.Dest.String(), strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
 		conf.System.User, conf.System.Pass)
 

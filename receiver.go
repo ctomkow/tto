@@ -7,7 +7,7 @@ import (
 	"errors"
 	"github.com/ctomkow/tto/configuration"
 	"github.com/ctomkow/tto/database"
-	"github.com/ctomkow/tto/local"
+	"github.com/ctomkow/tto/execute"
 	"github.com/ctomkow/tto/processes"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
@@ -71,7 +71,7 @@ func Receiver(conf *configuration.Config) error {
 			lck.restore = true
 
 			// run exec_before
-			output, err := local.RunCommand(conf.System.Role.Receiver.ExecBefore)
+			output, err := execute.Local(conf.System.Role.Receiver.ExecBefore)
 			if err != nil {
 				glog.Error(err)
 				lck.restore = false
@@ -99,7 +99,7 @@ func Receiver(conf *configuration.Config) error {
 			}
 
 			// run exec_after
-			output, err := local.RunCommand(conf.System.Role.Receiver.ExecAfter)
+			output, err := execute.Local(conf.System.Role.Receiver.ExecAfter)
 			if err != nil {
 				glog.Error(err)
 			} else {

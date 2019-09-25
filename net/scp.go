@@ -3,7 +3,7 @@
 
 // Modified from copyrighted work (Mozilla Public License 2.0) by Bram Vandenbogaerde (https://github.com/bramvdbogaerde/go-scp)
 
-package remote
+package net
 
 import (
 	"bytes"
@@ -18,11 +18,18 @@ import (
 
 func (sh *SSH) CopyBytes(byteBuffer []byte, filename string, workingDir string, permissions string) error {
 
+	// ensure a new session is created before acting!
+	if err := sh.NewSession(); err != nil {
+		return err
+	}
+
 	byteReader := bytes.NewReader(byteBuffer)
 	return sh.copy(byteReader, workingDir+filename, permissions, int64(len(byteBuffer)))
 }
 
 func (sh *SSH) copy(r io.Reader, absolutePath string, permissions string, size int64) error {
+
+	// TODO: create new session in here somewhere!!! Always new new session after consuming one!
 
 	filename := path.Base(absolutePath)
 	directory := path.Dir(absolutePath)

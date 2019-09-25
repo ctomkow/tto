@@ -1,7 +1,7 @@
 // Craig Tomkow
 // July 24, 2019
 
-package remote
+package net
 
 import (
 	"golang.org/x/crypto/ssh"
@@ -41,6 +41,7 @@ func (sh *SSH) Connect() error {
 	}
 
 	sh.connection = client
+
 	return nil
 }
 
@@ -69,4 +70,9 @@ func (sh *SSH) CloseSession() error {
 	}
 
 	return nil
+}
+
+func (sh *SSH) GetSession() *ssh.Session {
+
+	return sh.session
 }
