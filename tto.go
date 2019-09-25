@@ -18,16 +18,14 @@ const (
 	// name of the service
 	name        = "tto"
 	description = "3-2-1 go!"
-	usage 		= "Usage: [flags] (install | remove | fg)"
-	flags		=
-		`
+	usage       = "Usage: [flags] (install | remove | fg)"
+	flags       = `
 	--help
 		prints this message
 	--conf string
 		custom named configuration file. default is conf.json
 	`
-	commands	=
-	`
+	commands = `
 	install
 		creates a daemon manager script depending on the service manager (SysV, Systemd, runit)
 	remove
@@ -43,7 +41,7 @@ func main() {
 		glog.Fatal(err)
 	}
 	configFile := conf.SetConfFlag()
-	conf.SetUserUsage(usage, commands,  flags)
+	conf.SetUserUsage(usage, commands, flags)
 	conf.ParseFlags()
 
 	var cmd = new(conf.Command)

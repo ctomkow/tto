@@ -28,8 +28,8 @@ func TestConfig_MakeConfig(t *testing.T) {
 	}
 
 	// sender config tests
-	if !(conf.System.Role.Sender.Dest.IP.Equal(net.IP{6,6,6,6})) {
-		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Sender.Dest.IP.String(), net.IP{6,6,6,6}.String())
+	if !(conf.System.Role.Sender.Dest.IP.Equal(net.IP{6, 6, 6, 6})) {
+		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Sender.Dest.IP.String(), net.IP{6, 6, 6, 6}.String())
 	}
 	if !(conf.System.Role.Sender.Port == 22) {
 		t.Errorf("Make config test failed; found, expected: %d, %d", conf.System.Role.Sender.Port, 22)
@@ -37,8 +37,8 @@ func TestConfig_MakeConfig(t *testing.T) {
 	if !(conf.System.Role.Sender.Database == "mysql") {
 		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Sender.Database, "mysql")
 	}
-	if !(conf.System.Role.Sender.DBip.IP.Equal(net.IP{7,7,7,7})) {
-		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Sender.DBip.IP.String(), net.IP{7,7,7,7}.String())
+	if !(conf.System.Role.Sender.DBip.IP.Equal(net.IP{7, 7, 7, 7})) {
+		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Sender.DBip.IP.String(), net.IP{7, 7, 7, 7}.String())
 	}
 	if !(conf.System.Role.Sender.DBport == 3306) {
 		t.Errorf("Make config test failed; found, expected: %d, %d", conf.System.Role.Sender.Port, 3306)
@@ -63,8 +63,8 @@ func TestConfig_MakeConfig(t *testing.T) {
 	if !(conf.System.Role.Receiver.Database == "mysql") {
 		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Receiver.Database, "mysql")
 	}
-	if !(conf.System.Role.Receiver.DBip.IP.Equal(net.IP{8,8,8,8})) {
-		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Receiver.DBip.IP.String(), net.IP{8,8,8,8}.String())
+	if !(conf.System.Role.Receiver.DBip.IP.Equal(net.IP{8, 8, 8, 8})) {
+		t.Errorf("Make config test failed; found, expected: %s, %s", conf.System.Role.Receiver.DBip.IP.String(), net.IP{8, 8, 8, 8}.String())
 	}
 	if !(conf.System.Role.Receiver.DBport == 3306) {
 		t.Errorf("Make config test failed; found, expected: %d, %d", conf.System.Role.Receiver.DBport, 3306)

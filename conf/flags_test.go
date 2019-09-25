@@ -32,12 +32,12 @@ func Test_SetUserUsage(t *testing.T) {
 
 	/*
 
-	var errBuff []byte
-	numOfBytes, _ := os.Stderr.Read(errBuff)
+		var errBuff []byte
+		numOfBytes, _ := os.Stderr.Read(errBuff)
 
-	if numOfBytes == 0 {
-		t.Errorf("Usage test failed; found, expected: %d, %s", numOfBytes, "not zero")
-	}
+		if numOfBytes == 0 {
+			t.Errorf("Usage test failed; found, expected: %d, %s", numOfBytes, "not zero")
+		}
 
 	*/
 }

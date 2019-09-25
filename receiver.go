@@ -5,10 +5,10 @@ package main
 
 import (
 	"errors"
+	"github.com/ctomkow/tto/backup"
 	"github.com/ctomkow/tto/conf"
 	"github.com/ctomkow/tto/db"
 	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/backup"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"os"

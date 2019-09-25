@@ -30,14 +30,14 @@ type Config struct {
 				MaxBackups int        `json:"max_backups"`
 			}
 			Receiver struct {
-				Database string     `json:"database"`
-				DBip     net.IPAddr `json:"db_ip"`
-				DBport   uint16     `json:"db_port"`
-				DBuser   string     `json:"db_user"`
-				DBpass   string     `json:"db_pass"`
-				DBname   string     `json:"db_name"`
-				ExecBefore []string `json:"exec_before"`
-				ExecAfter  []string `json:"exec_after"`
+				Database   string     `json:"database"`
+				DBip       net.IPAddr `json:"db_ip"`
+				DBport     uint16     `json:"db_port"`
+				DBuser     string     `json:"db_user"`
+				DBpass     string     `json:"db_pass"`
+				DBname     string     `json:"db_name"`
+				ExecBefore []string   `json:"exec_before"`
+				ExecAfter  []string   `json:"exec_after"`
 			}
 		}
 	}

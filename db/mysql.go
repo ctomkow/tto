@@ -90,25 +90,25 @@ func (db *Database) Dump(workingDir string) ([]byte, string, error) {
 	if strings.Compare(db.impl, "mysql") == 0 {
 		cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name)
 	} else {
-		return nil, "" , errors.New("unsupported database type")
+		return nil, "", errors.New("unsupported database type")
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, "" , err
+		return nil, "", err
 	}
 
 	if err = cmd.Start(); err != nil {
-		return nil, "" , err
+		return nil, "", err
 	}
 
 	byteBuffer, err := ioutil.ReadAll(stdout)
 	if err != nil {
-		return nil, "" , err
+		return nil, "", err
 	}
 
 	if err = cmd.Wait(); err != nil {
-		return nil, "" , err
+		return nil, "", err
 	}
 
 	return byteBuffer, sqlFile, nil

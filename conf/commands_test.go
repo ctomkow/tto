@@ -9,8 +9,8 @@ import (
 )
 
 var testArgs = []struct {
-	input		[]string
-	expected	bool
+	input    []string
+	expected bool
 }{
 	{[]string{"install"}, true},
 	{[]string{"remove"}, true},
