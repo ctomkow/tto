@@ -5,7 +5,10 @@ package net
 
 import (
 	"errors"
+	"github.com/golang/glog"
 	"golang.org/x/crypto/ssh"
+	"strconv"
+	"time"
 )
 
 type SSH struct {
@@ -88,4 +91,21 @@ func (sh *SSH) TestConnection() error {
 	}
 
 	return nil
+}
+
+func (sh *SSH) Reconnect(tries int, delayInSec int) error {
+
+	for i := 1; i <= tries; i++ {
+		glog.Error("[" + strconv.Itoa(i) + "/" + strconv.Itoa(tries)+ "]" + " attempting to re-connect with remote")
+		if err := sh.Connect(); err != nil {
+			glog.Error("failed to re-establish connection with remote")
+		} else {
+			glog.Info("re-established connection with remote")
+			return nil
+		}
+
+		time.Sleep(time.Duration(delayInSec) * time.Second)
+	}
+
+	return errors.New("reconnection with remote failed")
 }

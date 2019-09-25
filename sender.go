@@ -71,21 +71,12 @@ func Sender(conf *conf.Config) error {
 			} else {
 				break
 			}
-
 			glog.Error("remote connection is down. backups are suspended until connection is re-established")
-
-			// try re-connecting 3 times with a sleep of 1 minutes in-between
-			for i := 1; i <= 3; i++ {
-				glog.Error("[" + strconv.Itoa(i) + "/3]" + " attempting to re-connect with remote")
-				if err := remoteHost.Connect(); err != nil {
-					glog.Error("failed to re-establish connection with remote")
-				} else {
-					remoteAlive = true
-					glog.Info("re-established connection with remote")
-					break // success!
-				}
+			if err := remoteHost.Reconnect(3, 10); err != nil {
+				glog.Error(err)
 				remoteAlive = false
-				time.Sleep(10 * time.Second)
+			} else {
+				remoteAlive = true
 			}
 
 		// cron trigger
