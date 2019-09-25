@@ -46,14 +46,14 @@ func Sender(conf *conf.Config) error {
 		return err
 	}
 	remoteAlive := true
-	remoteDBdumps, err := backup.GetRemoteDumps(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
+	remoteDBdumps, err := backup.GetBackups(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		return err
 	}
 	sortedDbDumpTimestamps := ParseDbDumpFilename(remoteDBdumps)
 	buffOverflowTimestamps := fillBuffer(buff, conf.System.Role.Sender.DBname, sortedDbDumpTimestamps)
 	buffOverflowDbDumpNames := buildDbDumpNames(conf.System.Role.Sender.DBname, buffOverflowTimestamps)
-	if err := backup.DelRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowDbDumpNames); err != nil {
+	if err := backup.Delete(remoteHost, conf.System.WorkingDir, buffOverflowDbDumpNames); err != nil {
 		glog.Error(err)
 	}
 
@@ -101,7 +101,7 @@ func Sender(conf *conf.Config) error {
 				break
 			}
 
-			err = backup.DumpToRemote(remoteHost, conf.System.WorkingDir, dumpName, dumpBuffer)
+			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, dumpName, dumpBuffer)
 			if err != nil {
 				glog.Error(err)
 				break
@@ -115,7 +115,7 @@ func Sender(conf *conf.Config) error {
 			// delete the dump that get's kicked out of the ring buffer
 			var buffOverflowFilenames []string
 			buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
-			if err := backup.DelRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+			if err := backup.Delete(remoteHost, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
 				glog.Error(err)
 				break
 			}

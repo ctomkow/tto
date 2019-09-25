@@ -81,7 +81,7 @@ func Receiver(conf *conf.Config) error {
 
 			// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 			go func() {
-				restoredDump, err := backup.RestoreDb(db, conf.System.WorkingDir)
+				restoredDump, err := backup.Restore(db, conf.System.WorkingDir)
 				if err != nil {
 					glog.Error(err)
 					restoreChan <- ""

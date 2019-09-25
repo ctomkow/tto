@@ -9,18 +9,8 @@ import (
 	"github.com/ctomkow/tto/exec"
 )
 
-func GetRemoteDumps(sh *net.SSH, dbName string, workingDir string) (string, error) {
-
-	result, err := exec.RemoteCmd(sh, "find " + workingDir + " -name *'" + dbName + "*.sql'")
-	if err != nil {
-		return "", err
-	}
-
-	return result, nil
-}
-
 // add lock file, copy dump over, remove lock, add lock for .latest.dump, update .latest.dump, remove lock
-func DumpToRemote(sh *net.SSH, workingDir string, dumpName string, dumpBytes []byte) error {
+func ToRemote(sh *net.SSH, workingDir string, dumpName string, dumpBytes []byte) error {
 
 	_, err := exec.RemoteCmd(sh, "touch " + workingDir + "~" + dumpName + ".lock")
 	if err != nil {
@@ -49,7 +39,17 @@ func DumpToRemote(sh *net.SSH, workingDir string, dumpName string, dumpBytes []b
 	return nil
 }
 
-func DelRemoteDumps(sh *net.SSH, workingDir string, arrayOfFilenames []string) error {
+func GetBackups(sh *net.SSH, dbName string, workingDir string) (string, error) {
+
+	result, err := exec.RemoteCmd(sh, "find " + workingDir + " -name *'" + dbName + "*.sql'")
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+func Delete(sh *net.SSH, workingDir string, arrayOfFilenames []string) error {
 
 	for _, filename := range arrayOfFilenames {
 

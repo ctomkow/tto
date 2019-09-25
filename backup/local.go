@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func RestoreDb(db *db.Database, workingDir string) (string, error) {
+func Restore(db *db.Database, workingDir string) (string, error) {
 
 	// ## .latest.dump actions
 
