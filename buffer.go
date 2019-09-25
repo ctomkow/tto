@@ -3,10 +3,6 @@
 
 package main
 
-import (
-	"time"
-)
-
 type CircularQueue struct {
 	// size of the queue, defined by the max_backups specified in conf.json
 	size int
@@ -15,7 +11,6 @@ type CircularQueue struct {
 	// it has an artificial buffer limit size of 31, regardless of user specified max_backups
 	queue [31]struct {
 		name      string
-		timestamp time.Time
 	}
 
 	// the start and end pointers of the queue
@@ -30,40 +25,39 @@ func (cq *CircularQueue) Make(size int) {
 	cq.tail = 0
 }
 
-func (cq *CircularQueue) Populate(dbName string, dataToPopulate []time.Time) []time.Time {
+func (cq *CircularQueue) Populate(dataToPopulate []string) []string {
 
-	var bufferOverflow []time.Time
+	var bufOverwriteNames []string
 
 	for _, elem := range dataToPopulate {
-		bufferOverwrite := cq.Enqueue(dbName, elem)
+		bufOverwriteName := cq.Enqueue(elem)
 
-		if !bufferOverwrite.IsZero() {
-			bufferOverflow = append(bufferOverflow, bufferOverwrite)
+		if bufOverwriteName != "" {
+			bufOverwriteNames = append(bufOverwriteNames, bufOverwriteName)
 		}
 	}
 
-	return bufferOverflow
+	return bufOverwriteNames
 }
 
-func (cq *CircularQueue) Enqueue(dbName string, timestamp time.Time) time.Time {
+func (cq *CircularQueue) Enqueue(element string) string {
 
-	var bufferOverwrite time.Time
+	var bufOverwriteName string
 	// check if buffer element is not empty
-	if !cq.queue[cq.head].timestamp.IsZero() {
-		bufferOverwrite = cq.queue[cq.head].timestamp
+	if cq.queue[cq.head].name != "" {
+		bufOverwriteName = cq.queue[cq.head].name
 	}
 
 	// add to queue
 	cq.queue[cq.head] = struct {
 		name      string
-		timestamp time.Time
-	}{name: CompileDbDumpFilename(dbName, timestamp), timestamp: timestamp}
+	}{name: element}
 
 	// in this order!
 	cq.updateHead()
 	cq.updateTail()
 
-	return bufferOverwrite
+	return bufOverwriteName
 }
 
 func (cq *CircularQueue) updateHead() {

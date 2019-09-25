@@ -36,27 +36,30 @@ func Sender(conf *conf.Config) error {
 	ticker, testSSH := setupTicker(60)
 
 	// database dump prep and manipulation
-	//   - get the existing database dumps
-	//   - parse and sort them for only the timestamps
-	//   - add timestamps to ring buffer
-	//   - delete remote database dumps that didn't fit into ring buffer
+	//   - get the existing backups
+	//   - parse the multiline string into an array
+	//   - strip path
+	//   - add sorted backups to ring buffer
+	//   - delete backups that didn't fit into ring buffer
 	//   - start ticker that monitors ssh connection
 
 	if err := remoteHost.Connect(); err != nil {
 		return err
 	}
 	remoteAlive := true
-	remoteDBdumps, err := backup.GetBackups(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
+	backupsAsString, err := backup.GetBackups(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		return err
 	}
-	sortedDbDumpTimestamps := ParseDbDumpFilename(remoteDBdumps)
-	buffOverflowTimestamps := fillBuffer(buff, conf.System.Role.Sender.DBname, sortedDbDumpTimestamps)
-	buffOverflowDbDumpNames := buildDbDumpNames(conf.System.Role.Sender.DBname, buffOverflowTimestamps)
-	if err := backup.Delete(remoteHost, conf.System.WorkingDir, buffOverflowDbDumpNames); err != nil {
+	backups, err := parseMultilineString(backupsAsString)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	backups = StripPath(conf.System.WorkingDir, backups)
+	expiredDumps := fillBuffer(buff, SortBackups(backups))
+	if err := backup.Delete(remoteHost, conf.System.WorkingDir, expiredDumps); err != nil {
 		glog.Error(err)
 	}
-
 	cronjob.Start()
 	startTicker(ticker, testSSH)
 
@@ -86,27 +89,21 @@ func Sender(conf *conf.Config) error {
 				glog.Error("remote is down")
 				break
 			}
-			dumpBuffer, dumpName, err := db.Dump(conf.System.WorkingDir)
+			buf, backupName, err := db.Dump(conf.System.WorkingDir)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-
-			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, dumpName, dumpBuffer)
+			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, backupName, buf)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-
-			buffOverflowTimestamp := buff.Enqueue(conf.System.Role.Sender.DBname, ParseDbDumpFilename(dumpName)[0])
-			if buffOverflowTimestamp.IsZero() {
+			expiredDump := buff.Enqueue(backupName)
+			if expiredDump == "" {
 				break
 			}
-
-			// delete the dump that get's kicked out of the ring buffer
-			var buffOverflowFilenames []string
-			buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
-			if err := backup.Delete(remoteHost, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+			if err := backup.Delete(remoteHost, conf.System.WorkingDir, []string{expiredDump}); err != nil {
 				glog.Error(err)
 				break
 			}
@@ -173,26 +170,15 @@ func setupBuffer(maxSize int) *CircularQueue {
 	return buff
 }
 
-func fillBuffer(buff *CircularQueue, databaseName string, sortedTimestamps []time.Time) []time.Time {
+func fillBuffer(buff *CircularQueue, sortedBackups []string) []string {
 
-	buffOverflowTimestamps := buff.Populate(databaseName, sortedTimestamps)
+	expiredBuffElements := buff.Populate(sortedBackups)
 
 	for _, elem := range buff.queue[0:buff.size] {
 		glog.Info("existing backups: " + elem.name)
 	}
 
-	return buffOverflowTimestamps
-}
-
-func buildDbDumpNames(databaseName string, times []time.Time) []string {
-
-	// convert array of time.Time into array of DB dump filenames
-	var dbDumpNames []string
-	for _, timestamp := range times {
-		dbDumpNames = append(dbDumpNames, CompileDbDumpFilename(databaseName, timestamp))
-	}
-
-	return dbDumpNames
+	return expiredBuffElements
 }
 
 func setupCron(cronStatement string) (chan bool, *cron.Cron) {

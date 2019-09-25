@@ -49,9 +49,9 @@ func GetBackups(sh *net.SSH, dbName string, workingDir string) (string, error) {
 	return result, nil
 }
 
-func Delete(sh *net.SSH, workingDir string, arrayOfFilenames []string) error {
+func Delete(sh *net.SSH, workingDir string, filenames []string) error {
 
-	for _, filename := range arrayOfFilenames {
+	for _, filename := range filenames {
 
 		_, err := exec.RemoteCmd(sh, "rm "+workingDir+filename)
 		if err != nil {

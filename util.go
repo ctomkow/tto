@@ -12,35 +12,42 @@ import (
 	"time"
 )
 
-// ring buffer prep work: count existing backups, store into ring buffer
+func StripPath(path string, filenames []string) []string {
 
-func ParseDbDumpFilename(filename string) []time.Time {
+	var results []string
+	for _, elem := range filenames {
 
-	arrayOfStrings, err := parseMultilineString(filename)
-	if err != nil {
-		glog.Fatal(err)
+		results = append(results, strings.Replace(elem, path, "", -1))
 	}
 
+	return results
+}
+
+func SortBackups(filenames []string) []string {
+
+	var dbName string
+	var timeString string
+
 	var arrayOfTimestamps []time.Time
+	for _, elem := range filenames {
 
-	for _, elem := range arrayOfStrings {
-
-		// grab after dash
+		// grab before and after dash
 		slicedElements, err := sliceOnDelimiter("-", elem)
 		if err != nil {
 			glog.Fatal(err)
 		}
+		dbName    = slicedElements[0]
 		afterDash := slicedElements[1]
 
-		// grab before dot
+		// grab before dot but after dash
 		slicedElements, err = sliceOnDelimiter(".", afterDash)
 		if err != nil {
 			glog.Fatal(err)
 		}
-		betweenDashDot := slicedElements[0]
+		timeString = slicedElements[0]
 
 		// parse timestamp into time.Time
-		timeOfDump, err := parseTimeString(betweenDashDot)
+		timeOfDump, err := parseTimeString(timeString)
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -50,16 +57,23 @@ func ParseDbDumpFilename(filename string) []time.Time {
 
 	arrayOfTimestamps = sortTimestamps(arrayOfTimestamps)
 
-	return arrayOfTimestamps
+	//re-compile the full filename
+	var dumps []string
+	for _, elem := range arrayOfTimestamps {
+
+		dumps = append(dumps, compileBackupFilename(dbName, elem))
+	}
+
+	return dumps
 }
 
-func CompileDbDumpFilename(dbName string, timestamp time.Time) string {
+// ## parse helpers ##
+
+func compileBackupFilename(dbName string, timestamp time.Time) string {
 
 	compiledString := dbName + "-" + timestamp.Format("20060102150405") + ".sql"
 	return compiledString
 }
-
-// ## parse helpers ##
 
 func parseMultilineString(mString string) ([]string, error) {
 
