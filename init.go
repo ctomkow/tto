@@ -5,7 +5,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/ctomkow/tto/configuration"
+	"github.com/ctomkow/tto/conf"
 	"github.com/golang/glog"
 	"os"
 	"os/user"
@@ -32,7 +32,7 @@ func install() {
 		}()
 
 		// populate with sample configuration
-		var sampleConf = new(configuration.Config)
+		var sampleConf = new(conf.Config)
 		sampleConf.MakeConfig()
 
 		var jsonData []byte
@@ -54,7 +54,7 @@ func install() {
 	}
 }
 
-func setupWorkingDir(conf *configuration.Config) {
+func setupWorkingDir(conf *conf.Config) {
 
 	// ensure working directory files exists
 	if !fileExists(conf.System.WorkingDir + ".latest.dump") {
@@ -75,7 +75,7 @@ func setupWorkingDir(conf *configuration.Config) {
 	}
 }
 
-func setupPermissions(conf *configuration.Config) {
+func setupPermissions(conf *conf.Config) {
 
 	// chown all files to appropriate usr
 

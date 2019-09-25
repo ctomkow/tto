@@ -6,12 +6,12 @@ package processes
 import (
 	"github.com/ctomkow/tto/net"
 	"github.com/golang/glog"
-	"github.com/ctomkow/tto/execute"
+	"github.com/ctomkow/tto/exec"
 )
 
 func GetRemoteDumps(sh *net.SSH, dbName string, workingDir string) (string, error) {
 
-	result, err := execute.Remote(sh, "find " + workingDir + " -name *'" + dbName + "*.sql'")
+	result, err := exec.RemoteCmd(sh, "find " + workingDir + " -name *'" + dbName + "*.sql'")
 	if err != nil {
 		return "", err
 	}
@@ -22,7 +22,7 @@ func GetRemoteDumps(sh *net.SSH, dbName string, workingDir string) (string, erro
 func TransferDumpToRemote(sh *net.SSH, workingDir string, dumpName string, dumpBytes []byte) error {
 
 	// add lock file on remote system for mysql dumpName
-	_, err := execute.Remote(sh, "touch " + workingDir + "~" + dumpName + ".lock")
+	_, err := exec.RemoteCmd(sh, "touch " + workingDir + "~" + dumpName + ".lock")
 	if err != nil {
 		return err
 	}
@@ -32,22 +32,22 @@ func TransferDumpToRemote(sh *net.SSH, workingDir string, dumpName string, dumpB
 		return err
 	}
 	// remove lock file on remote system for mysql dumpName
-	_, err = execute.Remote(sh,"rm " + workingDir + "~" + dumpName + ".lock")
+	_, err = exec.RemoteCmd(sh,"rm " + workingDir + "~" + dumpName + ".lock")
 	if err != nil {
 		return err
 	}
 	// add lock file on remote system for .latest.dump
-	_, err = execute.Remote(sh,"touch " + workingDir + "~.latest.dump.lock")
+	_, err = exec.RemoteCmd(sh,"touch " + workingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
 	// update latest dumpName notes on remote system
-	_, err = execute.Remote(sh,"echo " + dumpName + " > " + workingDir + ".latest.dump")
+	_, err = exec.RemoteCmd(sh,"echo " + dumpName + " > " + workingDir + ".latest.dump")
 	if err != nil {
 		return err
 	}
 	// remove lock file on remote system for .latest.dump
-	_, err = execute.Remote(sh,"rm " + workingDir + "~.latest.dump.lock")
+	_, err = exec.RemoteCmd(sh,"rm " + workingDir + "~.latest.dump.lock")
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func DeleteRemoteDumps(sh *net.SSH, workingDir string, arrayOfFilenames []string
 
 	for _, filename := range arrayOfFilenames {
 
-		_, err := execute.Remote(sh, "rm " + workingDir + filename)
+		_, err := exec.RemoteCmd(sh, "rm " + workingDir + filename)
 		if err != nil {
 			return err
 		}

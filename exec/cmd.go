@@ -9,7 +9,7 @@ import (
 	"os/exec"
 )
 
-func Remote(ssh *net.SSH, command string) (string, error) {
+func RemoteCmd(ssh *net.SSH, command string) (string, error) {
 
 	// ensure a new session is created before acting!
 	if err := ssh.NewSession(); err != nil {
@@ -27,7 +27,7 @@ func Remote(ssh *net.SSH, command string) (string, error) {
 	return stdoutBuffer.String(), nil
 }
 
-func Local(command []string) (string, error) {
+func LocalCmd(command []string) (string, error) {
 
 	cmd := exec.Command(command[0], command[1:]...)
 	var out bytes.Buffer
