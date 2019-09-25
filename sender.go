@@ -5,10 +5,10 @@ package main
 
 import (
 	"errors"
-	"github.com/ctomkow/tto/configuration"
-	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/conf"
+	"github.com/ctomkow/tto/db"
 	"github.com/ctomkow/tto/net"
-	"github.com/ctomkow/tto/processes"
+	"github.com/ctomkow/tto/backup"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
 	"os"
@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func Sender(conf *configuration.Config) error {
+func Sender(conf *conf.Config) error {
 
 	// setup various components
 	//   - signal interrupts
@@ -46,14 +46,14 @@ func Sender(conf *configuration.Config) error {
 		return err
 	}
 	remoteAlive := true
-	remoteDBdumps, err := processes.GetRemoteDumps(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
+	remoteDBdumps, err := backup.GetRemoteDumps(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		return err
 	}
 	sortedDbDumpTimestamps := ParseDbDumpFilename(remoteDBdumps)
 	buffOverflowTimestamps := fillBuffer(buff, conf.System.Role.Sender.DBname, sortedDbDumpTimestamps)
 	buffOverflowDbDumpNames := buildDbDumpNames(conf.System.Role.Sender.DBname, buffOverflowTimestamps)
-	if err := processes.DeleteRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowDbDumpNames); err != nil {
+	if err := backup.DelRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowDbDumpNames); err != nil {
 		glog.Error(err)
 	}
 
@@ -66,14 +66,12 @@ func Sender(conf *configuration.Config) error {
 		// test ssh connection
 		case <-testSSH:
 
-			err := remoteHost.NewSession()
-
-			if err == nil {
-				if err = remoteHost.CloseSession(); err != nil {
-					glog.Error("could not close test ssh session")
-				}
+			if err = remoteHost.TestConnection(); err != nil {
+				glog.Error(err)
+			} else {
 				break
 			}
+
 			glog.Error("remote connection is down. backups are suspended until connection is re-established")
 
 			// try re-connecting 3 times with a sleep of 1 minutes in-between
@@ -103,7 +101,7 @@ func Sender(conf *configuration.Config) error {
 				break
 			}
 
-			err = processes.TransferDumpToRemote(remoteHost, conf.System.WorkingDir, dumpName, dumpBuffer)
+			err = backup.DumpToRemote(remoteHost, conf.System.WorkingDir, dumpName, dumpBuffer)
 			if err != nil {
 				glog.Error(err)
 				break
@@ -117,7 +115,7 @@ func Sender(conf *configuration.Config) error {
 			// delete the dump that get's kicked out of the ring buffer
 			var buffOverflowFilenames []string
 			buffOverflowFilenames = append(buffOverflowFilenames, CompileDbDumpFilename(conf.System.Role.Sender.DBname, buffOverflowTimestamp))
-			if err := processes.DeleteRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
+			if err := backup.DelRemoteDumps(remoteHost, conf.System.WorkingDir, buffOverflowFilenames); err != nil {
 				glog.Error(err)
 				break
 			}
@@ -153,18 +151,18 @@ func SetupSignal() chan os.Signal {
 	return interrupt
 }
 
-func setupSenderDatabase(conf *configuration.Config) *database.Database {
+func setupSenderDatabase(conf *conf.Config) *db.Database {
 
 	// setup database connection for sender
 	// default max db connections is 10
-	var db = new(database.Database)
+	var db = new(db.Database)
 	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
 		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname, 10)
 
 	return db
 }
 
-func setupSSH(conf *configuration.Config) *net.SSH {
+func setupSSH(conf *conf.Config) *net.SSH {
 
 	// setup remote SSH connection
 	var remoteConnPtr = new(net.SSH)

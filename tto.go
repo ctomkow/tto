@@ -5,7 +5,7 @@ package main
 
 import (
 	"errors"
-	"github.com/ctomkow/tto/configuration"
+	"github.com/ctomkow/tto/conf"
 	"github.com/golang/glog"
 	"github.com/takama/daemon"
 )
@@ -39,14 +39,14 @@ const (
 
 func main() {
 
-	if err := configuration.SetLogToStderr(); err != nil {
+	if err := conf.SetLogToStderr(); err != nil {
 		glog.Fatal(err)
 	}
-	configFile := configuration.SetConfFlag()
-	configuration.SetUserUsage(usage, commands,  flags)
-	configuration.ParseFlags()
+	configFile := conf.SetConfFlag()
+	conf.SetUserUsage(usage, commands,  flags)
+	conf.ParseFlags()
 
-	var cmd = new(configuration.Command)
+	var cmd = new(conf.Command)
 	if err := cmd.MakeCmd(); err != nil {
 		glog.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func main() {
 
 // daemon manager
 
-func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (string, error) {
+func (srv *Service) Manage(cmd *conf.Command, configFile *string) (string, error) {
 
 	if cmd.Install {
 		return srv.Install("fg")
@@ -87,7 +87,7 @@ func (srv *Service) Manage(cmd *configuration.Command, configFile *string) (stri
 		glog.Fatal(usage)
 	}
 
-	var conf = new(configuration.Config)
+	var conf = new(conf.Config)
 	if err := conf.LoadConfig("/etc/tto/" + *configFile); err != nil {
 		glog.Exit(err)
 	}

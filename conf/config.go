@@ -1,7 +1,7 @@
 // Craig Tomkow
 // August 2, 2019
 
-package configuration
+package conf
 
 import (
 	"encoding/json"

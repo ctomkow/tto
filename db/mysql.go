@@ -1,7 +1,7 @@
 // Craig Tomkow
 // July 24, 2019
 
-package database
+package db
 
 import (
 	"bufio"

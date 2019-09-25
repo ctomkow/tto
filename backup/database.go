@@ -1,19 +1,19 @@
 // Craig Tomkow
 // August 2, 2019
 
-package processes
+package backup
 
 import (
 	"bufio"
 	"errors"
-	"github.com/ctomkow/tto/database"
+	"github.com/ctomkow/tto/db"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
 )
 
-func RestoreDatabase(db *database.Database, workingDir string) (string, error) {
+func RestoreDb(db *db.Database, workingDir string) (string, error) {
 
 	// ## .latest.dump actions
 

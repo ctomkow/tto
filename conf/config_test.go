@@ -1,7 +1,7 @@
 // Craig Tomkow
 // September 19, 2019
 
-package configuration
+package conf
 
 import (
 	"net"

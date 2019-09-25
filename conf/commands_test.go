@@ -1,7 +1,7 @@
 // Craig Tomkow
 // August 15, 2019
 
-package configuration
+package conf
 
 import (
 	"flag"

@@ -4,6 +4,7 @@
 package net
 
 import (
+	"errors"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -75,4 +76,16 @@ func (sh *SSH) CloseSession() error {
 func (sh *SSH) GetSession() *ssh.Session {
 
 	return sh.session
+}
+
+func (sh *SSH) TestConnection() error {
+
+	if err := sh.NewSession(); err != nil {
+		return err
+	}
+	if err := sh.CloseSession(); err != nil {
+		return errors.New("could not close test ssh session")
+	}
+
+	return nil
 }

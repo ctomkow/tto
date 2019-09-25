@@ -5,10 +5,10 @@ package main
 
 import (
 	"errors"
-	"github.com/ctomkow/tto/configuration"
-	"github.com/ctomkow/tto/database"
-	"github.com/ctomkow/tto/execute"
-	"github.com/ctomkow/tto/processes"
+	"github.com/ctomkow/tto/conf"
+	"github.com/ctomkow/tto/db"
+	"github.com/ctomkow/tto/exec"
+	"github.com/ctomkow/tto/backup"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"os"
@@ -18,7 +18,7 @@ type lock struct {
 	restore bool
 }
 
-func Receiver(conf *configuration.Config) error {
+func Receiver(conf *conf.Config) error {
 
 	// setup various components
 	//   - signal interrupts
@@ -71,7 +71,7 @@ func Receiver(conf *configuration.Config) error {
 			lck.restore = true
 
 			// run exec_before
-			output, err := execute.Local(conf.System.Role.Receiver.ExecBefore)
+			output, err := exec.LocalCmd(conf.System.Role.Receiver.ExecBefore)
 			if err != nil {
 				glog.Error(err)
 				lck.restore = false
@@ -81,7 +81,7 @@ func Receiver(conf *configuration.Config) error {
 
 			// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 			go func() {
-				restoredDump, err := processes.RestoreDatabase(db, conf.System.WorkingDir)
+				restoredDump, err := backup.RestoreDb(db, conf.System.WorkingDir)
 				if err != nil {
 					glog.Error(err)
 					restoreChan <- ""
@@ -99,7 +99,7 @@ func Receiver(conf *configuration.Config) error {
 			}
 
 			// run exec_after
-			output, err := execute.Local(conf.System.Role.Receiver.ExecAfter)
+			output, err := exec.LocalCmd(conf.System.Role.Receiver.ExecAfter)
 			if err != nil {
 				glog.Error(err)
 			} else {
@@ -142,11 +142,11 @@ func setupFileWatcher() (*fsnotify.Watcher, error) {
 	return watcher, nil
 }
 
-func setupReceiverDatabase(conf *configuration.Config) *database.Database {
+func setupReceiverDatabase(conf *conf.Config) *db.Database {
 
 	// setup database connection for sender
 	// default max db connections is 10
-	var db = new(database.Database)
+	var db = new(db.Database)
 	db.Make(conf.System.Role.Receiver.Database, conf.System.Role.Receiver.DBip, conf.System.Role.Receiver.DBport,
 		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname, 10)
 
