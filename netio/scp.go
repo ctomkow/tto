@@ -6,6 +6,7 @@
 package netio
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/ctomkow/tto/exec"
@@ -17,22 +18,45 @@ import (
 	"time"
 )
 
-func Copy(byteBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *net.SSH) error {
+func StreamMySqlDump(byteBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *net.SSH) error {
 
 	// ensure a new session is created before acting!
 	if err := sh.NewSession(); err != nil {
 		return err
 	}
 
+	// add dashes (comment delimiter) to end of db dump to flush scp BUF because we are not specifying the exact file size
+	//    https://salsa.debian.org/ssh-team/openssh/blob/master/scp.c
+	//    https://github.com/openssh/openssh-portable/blob/master/scp.c
+	//
+	//    #define COPY_BUFLEN	16384
+	//
+	//    since this is a hack to make scp do our bidding, increase current COPY_BUFLEN by an order of magnitude
+	//    this only adds 160kB of overhead, not an issue when most prod databases are hundreds of MB or GB's.
+	//
+	//    the buffer is a valid SQL comment
+	//    https://docs.oracle.com/cd/B12037_01/server.101/b10759/sql_elements006.htm
+	//    -- zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz[...]\n
+	COPY_BUFLEN := 16384 * 10
+	buf := make([]byte, COPY_BUFLEN)
+	buf[0] = '-'
+	buf[1] = '-'
+	buf[2] = ' '
+	for i := 3; i < COPY_BUFLEN-1; i++ {
+		buf[i] = 'z'
+	}
+	buf[COPY_BUFLEN-1] = '\n'
+	flush := bytes.NewReader(buf)
+
 	// since i don't know the size of the dump, set a static max to 100GB (107374182400 bytes)
-	if err := copy(*byteBuffer, workingDir+filename, permissions, 107374182400, ex, sh); err != nil {
+	if err := stream(*byteBuffer, workingDir+filename, permissions, 107374182400, ex, sh, flush); err != nil {
 		glog.Error(err)
 	}
 
 	return nil
 }
 
-func copy(r io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *net.SSH) error {
+func stream(r io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *net.SSH, flush io.Reader) error {
 
 	filename := path.Base(absolutePath)
 	directory := path.Dir(absolutePath)
@@ -54,25 +78,26 @@ func copy(r io.ReadCloser, absolutePath string, permissions string, size int64, 
 				glog.Exit(err)
 			}
 		}()
-
 		_, err = fmt.Fprintln(w, "C"+permissions, size, filename)
 		if err != nil {
 			errCh <- err
 			return
 		}
-
 		_, err = io.Copy(w, r)
 		if err != nil {
 			errCh <- err
 			return
 		}
-
+		_, err = io.Copy(w, flush)
+		if err != nil {
+			errCh <- err
+			return
+		}
 		_, err = fmt.Fprint(w, "\x00")
 		if err != nil {
 			errCh <- err
 			return
 		}
-
 	}()
 
 	go func() {
@@ -83,7 +108,6 @@ func copy(r io.ReadCloser, absolutePath string, permissions string, size int64, 
 			//   SCP would properly close if we specify a correct file size, but we don't know that because we are streaming mysqldump
 			//   Therefore it is set to a max of 100GB
 			//   Consequently, we cannot handle an error case here :/
-
 		}
 	}()
 
@@ -92,7 +116,7 @@ func copy(r io.ReadCloser, absolutePath string, permissions string, size int64, 
 		return errors.New("timeout when upload files")
 	}
 
-	if err:= ex.Cmd.Wait(); err != nil {
+	if err := ex.Cmd.Wait(); err != nil {
 		return err
 	}
 

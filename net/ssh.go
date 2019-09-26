@@ -96,7 +96,7 @@ func (sh *SSH) TestConnection() error {
 func (sh *SSH) Reconnect(tries int, delayInSec int) error {
 
 	for i := 1; i <= tries; i++ {
-		glog.Error("[" + strconv.Itoa(i) + "/" + strconv.Itoa(tries)+ "]" + " attempting to re-connect with remote")
+		glog.Error("[" + strconv.Itoa(i) + "/" + strconv.Itoa(tries) + "]" + " attempting to re-connect with remote")
 		if err := sh.Connect(); err != nil {
 			glog.Error("failed to re-establish connection with remote")
 		} else {

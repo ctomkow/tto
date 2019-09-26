@@ -36,7 +36,7 @@ func SortBackups(filenames []string) []string {
 		if err != nil {
 			glog.Fatal(err)
 		}
-		dbName    = slicedElements[0]
+		dbName = slicedElements[0]
 		afterDash := slicedElements[1]
 
 		// grab before dot but after dash

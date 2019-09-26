@@ -18,7 +18,7 @@ func ToRemote(sh *net.SSH, workingDir string, dumpName string, stdout *io.ReadCl
 	if err != nil {
 		return err
 	}
-	if err = netio.Copy(stdout, dumpName, workingDir, "0600", ex, sh); err != nil {
+	if err = netio.StreamMySqlDump(stdout, dumpName, workingDir, "0600", ex, sh); err != nil {
 		return err
 	}
 	_, err = ex.RemoteCmd(sh, "rm "+workingDir+"~"+dumpName+".lock")

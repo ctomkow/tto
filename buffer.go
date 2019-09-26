@@ -10,7 +10,7 @@ type CircularQueue struct {
 	// circular queue is an array of structs queue{dbName string, timestamp time.Time}
 	// it has an artificial buffer limit size of 31, regardless of user specified max_backups
 	queue [31]struct {
-		name      string
+		name string
 	}
 
 	// the start and end pointers of the queue
@@ -50,7 +50,7 @@ func (cq *CircularQueue) Enqueue(element string) string {
 
 	// add to queue
 	cq.queue[cq.head] = struct {
-		name      string
+		name string
 	}{name: element}
 
 	// in this order!
