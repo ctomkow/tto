@@ -52,7 +52,7 @@ func (c *Exec) LocalCmd(command []string) (string, error) {
 
 func (c *Exec) MySqlDump(db *db.Database, workingDir string) (*io.ReadCloser, string, error) {
 
-	timestamp := util.MakeTimestamp().GetTimestamp()
+	timestamp := util.NewTimestamp().Timestamp()
 	ipArg     := "-h" + db.Ip.String()
 	portArg   := "-P" + strconv.FormatUint(uint64(db.Port), 10)
 	userArg   := "-u" + db.Username

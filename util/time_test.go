@@ -6,9 +6,9 @@ import (
 )
 
 // test each time segment: year, month, day, hour, min, sec
-func TestTimestamp_MakeTimestamp(t *testing.T) {
+func TestTimestamp_NewTimestamp(t *testing.T) {
 
-	ts := MakeTimestamp()
+	ts := NewTimestamp()
 
 	now := time.Now().UTC()
 	fmtTS := now.Format("20060102150405")
@@ -42,13 +42,13 @@ func TestTimestamp_MakeTimestamp(t *testing.T) {
 	}
 }
 
-func TestTimestamp_GetTimestamp(t *testing.T) {
+func TestTimestamp_Timestamp(t *testing.T) {
 
-	ts := MakeTimestamp()
+	ts := NewTimestamp()
 	now := time.Now().UTC()
 	fmtTS := now.Format("20060102150405")
 
-	if ts.GetTimestamp() != fmtTS {
+	if ts.Timestamp() != fmtTS {
 		t.Errorf("Formatted timestamp is wrong; expected, found: %s, %s", fmtTS, ts.fmtTime)
 	}
 }
