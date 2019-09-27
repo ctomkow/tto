@@ -8,11 +8,11 @@ import (
 	"errors"
 	"github.com/ctomkow/tto/db"
 	"github.com/ctomkow/tto/net"
+	"github.com/ctomkow/tto/util"
 	"io"
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Exec struct {
@@ -54,14 +54,13 @@ func (c *Exec) LocalCmd(command []string) (string, error) {
 
 func (c *Exec) MySqlDump(db *db.Database, workingDir string) (*io.ReadCloser, string, error) {
 
-	// YYYYMMDDhhmmss
-	currentTime := time.Now().UTC().Format("20060102150405") //TODO: remove static time format (or move it), buffer also relies on this format
+	timestamp := util.MakeTimestamp().GetTimestamp()
 
 	ipArg := "-h" + db.Ip.String()
 	portArg := "-P" + strconv.FormatUint(uint64(db.Port), 10)
 	userArg := "-u" + db.Username
 	passArg := "-p" + db.Password
-	sqlFile := db.Name + "-" + currentTime + ".sql"
+	sqlFile := db.Name + "-" + timestamp + ".sql"
 
 	if strings.Compare(db.Impl, "mysql") == 0 {
 		c.Cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.Name)
