@@ -12,6 +12,7 @@ import (
 	"github.com/ctomkow/tto/net"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
+	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -87,16 +88,27 @@ func Sender(conf *conf.Config) error {
 		// cron trigger
 		case <-cronChannel:
 
+			var backupStdout *io.ReadCloser
+			var backupName    string
+			var err			  error
+
 			if !remoteAlive {
 				glog.Error("remote is down")
 				break
 			}
-			streamingOutput, backupName, err := ex.MySqlDump(db, conf.System.WorkingDir)
+
+			switch db.Impl {
+			case "mysql":
+				backupStdout, backupName, err = ex.MySqlDump(db, conf.System.WorkingDir)
+			default:
+				err = errors.New("Unsupported database type: " + db.Impl)
+			}
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, backupName, streamingOutput, ex)
+
+			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, backupName, backupStdout, ex)
 			if err != nil {
 				glog.Error(err)
 				break

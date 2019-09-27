@@ -5,14 +5,12 @@ package exec
 
 import (
 	"bytes"
-	"errors"
 	"github.com/ctomkow/tto/db"
 	"github.com/ctomkow/tto/net"
 	"github.com/ctomkow/tto/util"
 	"io"
 	"os/exec"
 	"strconv"
-	"strings"
 )
 
 type Exec struct {
@@ -55,18 +53,13 @@ func (c *Exec) LocalCmd(command []string) (string, error) {
 func (c *Exec) MySqlDump(db *db.Database, workingDir string) (*io.ReadCloser, string, error) {
 
 	timestamp := util.MakeTimestamp().GetTimestamp()
+	ipArg     := "-h" + db.Ip.String()
+	portArg   := "-P" + strconv.FormatUint(uint64(db.Port), 10)
+	userArg   := "-u" + db.Username
+	passArg   := "-p" + db.Password
+	filename  := db.Name + "-" + timestamp + ".sql"
 
-	ipArg := "-h" + db.Ip.String()
-	portArg := "-P" + strconv.FormatUint(uint64(db.Port), 10)
-	userArg := "-u" + db.Username
-	passArg := "-p" + db.Password
-	sqlFile := db.Name + "-" + timestamp + ".sql"
-
-	if strings.Compare(db.Impl, "mysql") == 0 {
-		c.Cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.Name)
-	} else {
-		return nil, "", errors.New("unsupported database type")
-	}
+	c.Cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.Name)
 
 	stdout, err := c.Cmd.StdoutPipe()
 	if err != nil {
@@ -77,5 +70,5 @@ func (c *Exec) MySqlDump(db *db.Database, workingDir string) (*io.ReadCloser, st
 		return nil, "", err
 	}
 
-	return &stdout, sqlFile, nil
+	return &stdout, filename, nil
 }
