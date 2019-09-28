@@ -5,12 +5,8 @@ package exec
 
 import (
 	"bytes"
-	"github.com/ctomkow/tto/db"
 	"github.com/ctomkow/tto/net"
-	"github.com/ctomkow/tto/util"
-	"io"
 	"os/exec"
-	"strconv"
 )
 
 type Exec struct {
@@ -48,27 +44,4 @@ func (c *Exec) LocalCmd(command []string) (string, error) {
 	}
 
 	return out.String(), nil
-}
-
-func (c *Exec) MySqlDump(db *db.Database, workingDir string) (*io.ReadCloser, string, error) {
-
-	timestamp := util.NewTimestamp().Timestamp()
-	ipArg     := "-h" + db.Ip.String()
-	portArg   := "-P" + strconv.FormatUint(uint64(db.Port), 10)
-	userArg   := "-u" + db.Username
-	passArg   := "-p" + db.Password
-	filename  := db.Name + "-" + timestamp + ".sql"
-
-	c.Cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.Name)
-
-	stdout, err := c.Cmd.StdoutPipe()
-	if err != nil {
-		return nil, "", err
-	}
-
-	if err = c.Cmd.Start(); err != nil {
-		return nil, "", err
-	}
-
-	return &stdout, filename, nil
 }

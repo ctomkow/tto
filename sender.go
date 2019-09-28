@@ -37,6 +37,7 @@ func Sender(conf *conf.Config) error {
 	cronChannel, cronjob := setupCron(conf.System.Role.Sender.Cron)
 	ticker, testSSH := setupTicker(60)
 	ex := setupExec()
+	execDB := setupDump(db.Impl)
 
 	// database dump prep and manipulation
 	//   - get the existing backups
@@ -88,9 +89,8 @@ func Sender(conf *conf.Config) error {
 		// cron trigger
 		case <-cronChannel:
 
-			var backupStdout *io.ReadCloser
-			var backupName    string
-			var err			  error
+			var dumpStdout *io.ReadCloser
+			var err		    error
 
 			if !remoteAlive {
 				glog.Error("remote is down")
@@ -99,7 +99,7 @@ func Sender(conf *conf.Config) error {
 
 			switch db.Impl {
 			case "mysql":
-				backupStdout, backupName, err = ex.MySqlDump(db, conf.System.WorkingDir)
+				dumpStdout, err = execDB.Dump(db.Ip.String(), strconv.FormatUint(uint64(db.Port), 10), db.Username, db.Password, db.Name)
 			default:
 				err = errors.New("Unsupported database type: " + db.Impl)
 			}
@@ -108,12 +108,12 @@ func Sender(conf *conf.Config) error {
 				break
 			}
 
-			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, backupName, backupStdout, ex)
+			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, execDB.Name(), dumpStdout, ex)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			expiredDump := buff.Enqueue(backupName)
+			expiredDump := buff.Enqueue(execDB.Name())
 			if expiredDump == "" {
 				break
 			}
@@ -227,4 +227,17 @@ func setupExec() *exec.Exec {
 
 	var ex = new(exec.Exec)
 	return ex
+}
+
+// factory to implement the correct database dump
+func setupDump(impl string) exec.DB {
+
+	switch impl {
+	case "mysql":
+		return &exec.MysqlDump{}
+	case "postgres":
+		return &exec.PostgresDump{}
+	default:
+		return nil
+	}
 }
