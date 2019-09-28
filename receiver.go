@@ -10,6 +10,7 @@ import (
 	"github.com/ctomkow/tto/db"
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
+	"net"
 	"os"
 )
 
@@ -28,7 +29,15 @@ func Receiver(conf *conf.Config) error {
 	//   - execute commands
 
 	interrupt := SetupSignal()
-	db := setupReceiverDatabase(conf)
+	dB := setupReceiverDB(
+		conf.System.Role.Receiver.Database,
+		conf.System.Role.Receiver.DBip,
+		conf.System.Role.Receiver.DBport,
+		conf.System.Role.Receiver.DBuser,
+		conf.System.Role.Receiver.DBpass,
+		conf.System.Role.Receiver.DBname,
+		10,
+	)
 	watcher, err := setupFileWatcher()
 	if err != nil {
 		return err
@@ -48,7 +57,7 @@ func Receiver(conf *conf.Config) error {
 	//   - file change event variable
 
 	// TODO: try 3 times in failure
-	if err := db.Open(); err != nil {
+	if err := dB.Open(); err != nil {
 		return err
 	}
 	// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching). https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
@@ -82,7 +91,7 @@ func Receiver(conf *conf.Config) error {
 
 			// run restoreDatabase as a goroutine. goroutine holds a restoreDatabase lock until it's done
 			go func() {
-				restoredDump, err := backup.Restore(db, conf.System.WorkingDir)
+				restoredDump, err := backup.Restore(dB, conf.System.WorkingDir)
 				if err != nil {
 					glog.Error(err)
 					restoreChan <- ""
@@ -143,13 +152,15 @@ func setupFileWatcher() (*fsnotify.Watcher, error) {
 	return watcher, nil
 }
 
-func setupReceiverDatabase(conf *conf.Config) *db.Database {
-
-	// setup database connection for sender
-	// default max db connections is 10
-	var db = new(db.Database)
-	db.Make(conf.System.Role.Receiver.Database, conf.System.Role.Receiver.DBip, conf.System.Role.Receiver.DBport,
-		conf.System.Role.Receiver.DBuser, conf.System.Role.Receiver.DBpass, conf.System.Role.Receiver.DBname, 10)
-
-	return db
+// factory to setup chosen database
+func setupReceiverDB(impl string, ip net.IPAddr, port uint16, user string, pass string, name string, maxConn int) db.DB {
+	switch impl {
+	case "mysql":
+		return db.NewMysql(impl, ip, port, user, pass, name, maxConn)
+	case "postgres":
+		// pass
+	default:
+		return nil
+	}
+	return nil
 }

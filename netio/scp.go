@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/net"
+	"github.com/ctomkow/tto/inet"
 	"github.com/golang/glog"
 	"io"
 	"path"
@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func StreamMySqlDump(byteBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *net.SSH) error {
+func StreamMySqlDump(byteBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *inet.SSH) error {
 
 	// ensure a new session is created before acting!
 	if err := sh.NewSession(); err != nil {
@@ -56,7 +56,7 @@ func StreamMySqlDump(byteBuffer *io.ReadCloser, filename string, workingDir stri
 	return nil
 }
 
-func stream(r io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *net.SSH, flush io.Reader) error {
+func stream(r io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *inet.SSH, flush io.Reader) error {
 
 	filename := path.Base(absolutePath)
 	directory := path.Dir(absolutePath)

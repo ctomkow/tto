@@ -9,10 +9,10 @@ import (
 	"github.com/ctomkow/tto/conf"
 	"github.com/ctomkow/tto/db"
 	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/net"
+	"github.com/ctomkow/tto/inet"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
-	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -31,13 +31,19 @@ func Sender(conf *conf.Config) error {
 	//   - ticker to check on ssh connection
 
 	interrupt := SetupSignal()
-	db := setupSenderDatabase(conf)
+	dB := setupSenderDB(
+		conf.System.Role.Sender.Database,
+		conf.System.Role.Sender.DBip,
+		conf.System.Role.Sender.DBport,
+		conf.System.Role.Sender.DBuser,
+		conf.System.Role.Sender.DBpass,
+		conf.System.Role.Sender.DBname,
+	)
 	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
 	remoteHost := setupSSH(conf)
 	cronChannel, cronjob := setupCron(conf.System.Role.Sender.Cron)
 	ticker, testSSH := setupTicker(60)
 	ex := setupExec()
-	execDB := setupDump(db.Impl)
 
 	// database dump prep and manipulation
 	//   - get the existing backups
@@ -88,32 +94,23 @@ func Sender(conf *conf.Config) error {
 
 		// cron trigger
 		case <-cronChannel:
-
-			var dumpStdout *io.ReadCloser
-			var err		    error
-
 			if !remoteAlive {
 				glog.Error("remote is down")
 				break
 			}
 
-			switch db.Impl {
-			case "mysql":
-				dumpStdout, err = execDB.Dump(db.Ip.String(), strconv.FormatUint(uint64(db.Port), 10), db.Username, db.Password, db.Name)
-			default:
-				err = errors.New("Unsupported database type: " + db.Impl)
-			}
+			dumpStdout, err := dB.Dump()
 			if err != nil {
 				glog.Error(err)
 				break
 			}
 
-			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, execDB.Name(), dumpStdout, ex)
+			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, dB.Name(), dumpStdout, ex)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			expiredDump := buff.Enqueue(execDB.Name())
+			expiredDump := buff.Enqueue(dB.Name())
 			if expiredDump == "" {
 				break
 			}
@@ -153,21 +150,10 @@ func SetupSignal() chan os.Signal {
 	return interrupt
 }
 
-func setupSenderDatabase(conf *conf.Config) *db.Database {
-
-	// setup database connection for sender
-	// default max db connections is 10
-	var db = new(db.Database)
-	db.Make(conf.System.Role.Sender.Database, conf.System.Role.Sender.DBip, conf.System.Role.Sender.DBport,
-		conf.System.Role.Sender.DBuser, conf.System.Role.Sender.DBpass, conf.System.Role.Sender.DBname, 10)
-
-	return db
-}
-
-func setupSSH(conf *conf.Config) *net.SSH {
+func setupSSH(conf *conf.Config) *inet.SSH {
 
 	// setup remote SSH connection
-	var remoteConnPtr = new(net.SSH)
+	var remoteConnPtr = new(inet.SSH)
 	remoteConnPtr.Make(conf.System.Role.Sender.Dest.String(), strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
 		conf.System.User, conf.System.Pass)
 
@@ -229,15 +215,15 @@ func setupExec() *exec.Exec {
 	return ex
 }
 
-// factory to implement the correct database dump
-func setupDump(impl string) exec.DB {
-
+// factory to setup chosen database
+func setupSenderDB(impl string, ip net.IPAddr, port uint16, user string, pass string, name string) db.DB {
 	switch impl {
 	case "mysql":
-		return &exec.MysqlDump{}
+		return db.NewMysql(impl, ip, port, user, pass, name, 0)
 	case "postgres":
-		return &exec.PostgresDump{}
+		// pass
 	default:
 		return nil
 	}
+	return nil
 }

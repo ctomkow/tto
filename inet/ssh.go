@@ -1,7 +1,7 @@
 // Craig Tomkow
 // July 24, 2019
 
-package net
+package inet
 
 import (
 	"errors"

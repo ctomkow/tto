@@ -5,14 +5,14 @@ package backup
 
 import (
 	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/net"
+	"github.com/ctomkow/tto/inet"
 	"github.com/ctomkow/tto/netio"
 	"github.com/golang/glog"
 	"io"
 )
 
 // add lock file, copy dump over, remove lock, add lock for .latest.dump, update .latest.dump, remove lock
-func ToRemote(sh *net.SSH, workingDir string, dumpName string, stdout *io.ReadCloser, ex *exec.Exec) error {
+func ToRemote(sh *inet.SSH, workingDir string, dumpName string, stdout *io.ReadCloser, ex *exec.Exec) error {
 
 	_, err := ex.RemoteCmd(sh, "touch "+workingDir+"~"+dumpName+".lock")
 	if err != nil {
@@ -41,7 +41,7 @@ func ToRemote(sh *net.SSH, workingDir string, dumpName string, stdout *io.ReadCl
 	return nil
 }
 
-func GetBackups(sh *net.SSH, dbName string, workingDir string, ex *exec.Exec) (string, error) {
+func GetBackups(sh *inet.SSH, dbName string, workingDir string, ex *exec.Exec) (string, error) {
 
 	result, err := ex.RemoteCmd(sh, "find "+workingDir+" -name *'"+dbName+"*.sql'")
 	if err != nil {
@@ -51,7 +51,7 @@ func GetBackups(sh *net.SSH, dbName string, workingDir string, ex *exec.Exec) (s
 	return result, nil
 }
 
-func Delete(sh *net.SSH, workingDir string, filenames []string, ex *exec.Exec) error {
+func Delete(sh *inet.SSH, workingDir string, filenames []string, ex *exec.Exec) error {
 
 	for _, filename := range filenames {
 

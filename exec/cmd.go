@@ -5,7 +5,7 @@ package exec
 
 import (
 	"bytes"
-	"github.com/ctomkow/tto/net"
+	"github.com/ctomkow/tto/inet"
 	"os/exec"
 )
 
@@ -15,7 +15,7 @@ type Exec struct {
 	Cmd *exec.Cmd
 }
 
-func (c *Exec) RemoteCmd(ssh *net.SSH, command string) (string, error) {
+func (c *Exec) RemoteCmd(ssh *inet.SSH, command string) (string, error) {
 
 	// ensure a new session is created before acting!
 	if err := ssh.NewSession(); err != nil {

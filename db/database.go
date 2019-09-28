@@ -1,0 +1,31 @@
+// 2019 Craig Tomkow
+
+// the generic database file that defines the interface
+package db
+
+import (
+	"io"
+)
+
+type DB interface {
+	// open connection to database
+	Open() error
+
+	// create database
+	Create() error
+
+	// drop database
+	Drop() error
+
+	// dump the database with the command line utility
+	Dump() (*io.ReadCloser, error)
+
+	// restore the database using the database driver
+	Restore(dump string) error
+
+	// return the implementation type
+	Impl() string
+
+	// return the filename of the dump
+	Name() string
+}

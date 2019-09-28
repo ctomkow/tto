@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func Restore(db *db.Database, workingDir string) (string, error) {
+func Restore(dB db.DB, workingDir string) (string, error) {
 
 	// ## .latest.dump actions
 
@@ -58,7 +58,7 @@ func Restore(db *db.Database, workingDir string) (string, error) {
 	}
 
 	// ## safety check: latest dump vs configuration database name
-	if strings.Compare(strings.Split(latestDump, "-")[0], db.GetName()) != 0 {
+	if strings.Compare(strings.Split(latestDump, "-")[0], dB.Name()) != 0 {
 		// oh shit, someone is dumping one database but trying to restoreDatabase it into another one
 		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
@@ -84,7 +84,7 @@ func Restore(db *db.Database, workingDir string) (string, error) {
 
 	// TODO: error handling if database is DROP'd already... (not that it should be)
 	// restoreDatabase mysqldump into database
-	if err = db.Restore(workingDir + latestDump); err != nil {
+	if err = dB.Restore(workingDir + latestDump); err != nil {
 		return "", err
 	}
 
