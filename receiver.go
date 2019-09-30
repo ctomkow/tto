@@ -95,6 +95,7 @@ func Receiver(conf *conf.Config) error {
 				if err != nil {
 					glog.Error(err)
 					restoreChan <- ""
+					return
 				}
 				restoreChan <- restoredDump
 			}()
