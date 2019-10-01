@@ -26,10 +26,10 @@ func Receiver(conf *conf.Config) error {
 	//   - file watcher
 	//   - restore lock
 	//   - restore channel for the restore database routine
-	//   - execute commands
+	//   - os exec process handling
 
-	interrupt := SetupSignal()
-	dB := setupReceiverDB(
+	interrupt := newSignal()
+	dB := newReceiverDb(
 		conf.System.Role.Receiver.Database,
 		conf.System.Role.Receiver.DBip,
 		conf.System.Role.Receiver.DBport,
@@ -38,7 +38,7 @@ func Receiver(conf *conf.Config) error {
 		conf.System.Role.Receiver.DBname,
 		10,
 	)
-	watcher, err := setupFileWatcher()
+	watcher, err := newFileWatcher()
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func Receiver(conf *conf.Config) error {
 	}()
 	var lck = new(lock)
 	restoreChan := make(chan string)
-	ex := setupExec()
+	ex := newExecHandler()
 
 	// create working components
 	//   - open database connection
@@ -143,7 +143,7 @@ func isWriteEvent(event fsnotify.Event) bool {
 	return false
 }
 
-func setupFileWatcher() (*fsnotify.Watcher, error) {
+func newFileWatcher() (*fsnotify.Watcher, error) {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -154,7 +154,7 @@ func setupFileWatcher() (*fsnotify.Watcher, error) {
 }
 
 // factory to setup chosen database
-func setupReceiverDB(impl string, ip net.IPAddr, port uint16, user string, pass string, name string, maxConn int) db.DB {
+func newReceiverDb(impl string, ip net.IPAddr, port uint16, user string, pass string, name string, maxConn int) db.DB {
 	switch impl {
 	case "mysql":
 		return db.NewMysql(impl, ip, port, user, pass, name, maxConn)

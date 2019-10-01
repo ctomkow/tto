@@ -29,9 +29,10 @@ func Sender(conf *conf.Config) error {
 	//   - ssh connection to remote host
 	//   - cron scheduling
 	//   - ticker to check on ssh connection
+	//   - os exec process handling
 
-	interrupt := SetupSignal()
-	dB := setupSenderDB(
+	interrupt := newSignal()
+	dB := newSenderDb(
 		conf.System.Role.Sender.Database,
 		conf.System.Role.Sender.DBip,
 		conf.System.Role.Sender.DBport,
@@ -39,11 +40,16 @@ func Sender(conf *conf.Config) error {
 		conf.System.Role.Sender.DBpass,
 		conf.System.Role.Sender.DBname,
 	)
-	buff := setupBuffer(conf.System.Role.Sender.MaxBackups)
-	remoteHost := setupSSH(conf)
-	cronChannel, cronjob := setupCron(conf.System.Role.Sender.Cron)
-	ticker, testSSH := setupTicker(60)
-	ex := setupExec()
+	buf := newRingBuf(conf.System.Role.Sender.MaxBackups)
+	remote := newSSH(
+		conf.System.Role.Sender.Dest,
+		conf.System.Role.Sender.Port,
+		conf.System.User,
+		conf.System.Pass,
+	)
+	cronChan, cronJob := newCron(conf.System.Role.Sender.Cron)
+	tickerChan, ticker := newTicker(60)
+	exe := newExecHandler()
 
 	// database dump prep and manipulation
 	//   - get the existing backups
@@ -53,39 +59,37 @@ func Sender(conf *conf.Config) error {
 	//   - delete backups that didn't fit into ring buffer
 	//   - start ticker that monitors ssh connection
 
-	if err := remoteHost.Connect(); err != nil {
+	if err := remote.Connect(); err != nil {
 		return err
 	}
 	remoteAlive := true
-	backupsAsString, err := backup.GetBackups(remoteHost, conf.System.Role.Sender.DBname, conf.System.WorkingDir, ex)
+	multilineStringBackups, err := backup.Retrieve(remote, exe, conf.System.Role.Sender.DBname, conf.System.WorkingDir)
 	if err != nil {
 		return err
 	}
-	backups, err := parseMultilineString(backupsAsString)
+	backups, err := parseMultilineString(multilineStringBackups)
 	if err != nil {
 		glog.Fatal(err)
 	}
-	backups = StripPath(conf.System.WorkingDir, backups)
-	expiredDumps := fillBuffer(buff, SortBackups(backups))
-	if err := backup.Delete(remoteHost, conf.System.WorkingDir, expiredDumps, ex); err != nil {
+	backups = stripPath(conf.System.WorkingDir, backups)
+	expiredDumps := fillBuf(buf, sortBackups(backups))
+	if err := backup.Delete(remote, exe, conf.System.WorkingDir, expiredDumps); err != nil {
 		glog.Error(err)
 	}
-	cronjob.Start()
-	startTicker(ticker, testSSH)
-
+	cronJob.Start()
+	startTicker(ticker, tickerChan)
+	// TODO: I am here in the reformatting/refactoring
 	for {
 		select {
-
 		// test ssh connection
-		case <-testSSH:
-
-			if err = remoteHost.TestConnection(); err != nil {
+		case <-tickerChan:
+			if err = remote.TestConnection(); err != nil {
 				glog.Error(err)
 			} else {
 				break
 			}
 			glog.Error("remote connection is down. backups are suspended until connection is re-established")
-			if err := remoteHost.Reconnect(3, 10); err != nil {
+			if err := remote.Reconnect(3, 10); err != nil {
 				glog.Error(err)
 				remoteAlive = false
 			} else {
@@ -93,7 +97,7 @@ func Sender(conf *conf.Config) error {
 			}
 
 		// cron trigger
-		case <-cronChannel:
+		case <-cronChan:
 			if !remoteAlive {
 				glog.Error("remote is down")
 				break
@@ -105,16 +109,16 @@ func Sender(conf *conf.Config) error {
 				break
 			}
 
-			err = backup.ToRemote(remoteHost, conf.System.WorkingDir, dB.Name(), dumpStdout, ex)
+			err = backup.ToRemote(remote, conf.System.WorkingDir, dB.Name(), dumpStdout, exe)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			expiredDump := buff.Enqueue(dB.Name())
+			expiredDump := buf.Enqueue(dB.Name())
 			if expiredDump == "" {
 				break
 			}
-			if err := backup.Delete(remoteHost, conf.System.WorkingDir, []string{expiredDump}, ex); err != nil {
+			if err := backup.Delete(remote, exe, conf.System.WorkingDir, []string{expiredDump}); err != nil {
 				glog.Error(err)
 				break
 			}
@@ -130,93 +134,24 @@ func Sender(conf *conf.Config) error {
 			return errors.New("daemon was killed")
 		}
 	}
-
 	return nil
 }
 
 func cronTriggered(c chan bool) {
-
 	c <- true
 }
 
-func SetupSignal() chan os.Signal {
-
-	// Setup channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
+// Setup channel on which to send signal notifications.
+// We must use a buffered channel or risk missing the signal
+// if we're not ready to receive when the signal is sent.
+func newSignal() chan os.Signal {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
-
 	return interrupt
 }
 
-func setupSSH(conf *conf.Config) *inet.SSH {
-
-	// setup remote SSH connection
-	var remoteConnPtr = new(inet.SSH)
-	remoteConnPtr.Make(conf.System.Role.Sender.Dest.String(), strconv.FormatUint(uint64(conf.System.Role.Sender.Port), 10),
-		conf.System.User, conf.System.Pass)
-
-	glog.Info("receiver host: " + conf.System.Role.Sender.Dest.String())
-	return remoteConnPtr
-}
-
-func setupBuffer(maxSize int) *CircularQueue {
-
-	var buff = new(CircularQueue)
-	buff.Make(maxSize)
-
-	glog.Info("maximum backups: " + strconv.Itoa(maxSize))
-	return buff
-}
-
-func fillBuffer(buff *CircularQueue, sortedBackups []string) []string {
-
-	expiredBuffElements := buff.Populate(sortedBackups)
-
-	for _, elem := range buff.queue[0:buff.size] {
-		glog.Info("existing backups: " + elem.name)
-	}
-
-	return expiredBuffElements
-}
-
-func setupCron(cronStatement string) (chan bool, *cron.Cron) {
-
-	// cron setup
-	cronChannel := make(chan bool)
-	cj := cron.New()
-	cj.AddFunc(cronStatement, func() { cronTriggered(cronChannel) })
-
-	glog.Info("db backup schedule: " + cronStatement)
-	return cronChannel, cj
-}
-
-func setupTicker(secInterval time.Duration) (*time.Ticker, chan bool) {
-
-	ticker := time.NewTicker(secInterval * time.Second)
-	tickChannel := make(chan bool)
-
-	return ticker, tickChannel
-}
-
-func startTicker(ticker *time.Ticker, tickerChannel chan bool) {
-
-	go func() {
-		for _ = range ticker.C {
-			tickerChannel <- true
-		}
-	}()
-}
-
-func setupExec() *exec.Exec {
-
-	var ex = new(exec.Exec)
-	return ex
-}
-
 // factory to setup chosen database
-func setupSenderDB(impl string, ip net.IPAddr, port uint16, user string, pass string, name string) db.DB {
+func newSenderDb(impl string, ip net.IPAddr, port uint16, user string, pass string, name string) db.DB {
 	switch impl {
 	case "mysql":
 		return db.NewMysql(impl, ip, port, user, pass, name, 0)
@@ -226,4 +161,60 @@ func setupSenderDB(impl string, ip net.IPAddr, port uint16, user string, pass st
 		return nil
 	}
 	return nil
+}
+
+// create new ring buffer with a maximum size
+func newRingBuf(size int) *CircularQueue {
+	var buf = new(CircularQueue)
+	buf.Make(size)
+	glog.Info("maximum backups: " + strconv.Itoa(size))
+	return buf
+}
+
+// setup new ssh connection with remote host
+func newSSH(ip net.IPAddr, port uint16, user string, pass string) *inet.SSH {
+	var remoteConn = new(inet.SSH)
+	remoteConn.Make(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
+	glog.Info("receiver host: " + ip.String())
+	return remoteConn
+}
+
+// fill ring buffer with provided sorted backup names
+func fillBuf(buf *CircularQueue, sortedBackups []string) []string {
+	expiredBuffElements := buf.Populate(sortedBackups)
+	for _, elem := range buf.queue[0:buf.size] {
+		glog.Info("existing backups: " + elem.name)
+	}
+	return expiredBuffElements
+}
+
+// create a channel and cronjob
+func newCron(schedule string) (chan bool, *cron.Cron) {
+	channel := make(chan bool)
+	cj := cron.New()
+	cj.AddFunc(schedule, func() { cronTriggered(channel) })
+	glog.Info("db backup schedule: " + schedule)
+	return channel, cj
+}
+
+// create a channel and tick on every interval
+func newTicker(secInterval time.Duration) (chan bool, *time.Ticker) {
+	ticker := time.NewTicker(secInterval * time.Second)
+	channel := make(chan bool)
+	return channel, ticker
+}
+
+// start ticking
+func startTicker(ticker *time.Ticker, channel chan bool) {
+	go func() {
+		for _ = range ticker.C {
+			channel <- true
+		}
+	}()
+}
+
+// create new process exec handler
+func newExecHandler() *exec.Exec {
+	var exe = new(exec.Exec)
+	return exe
 }
