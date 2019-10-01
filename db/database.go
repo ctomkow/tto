@@ -4,6 +4,7 @@
 package db
 
 import (
+	"bufio"
 	"io"
 )
 
@@ -21,7 +22,7 @@ type DB interface {
 	Dump() (*io.ReadCloser, error)
 
 	// restore the database using the database driver
-	Restore(dump string) error
+	Restore(reader *bufio.Reader) error
 
 	// return the implementation type
 	Impl() string

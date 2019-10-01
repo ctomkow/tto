@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"errors"
 	"github.com/ctomkow/tto/db"
+	"github.com/golang/glog"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -82,9 +83,19 @@ func Restore(dB db.DB, workingDir string) (string, error) {
 		return "", errors.New(".latest.dump and .latest.restore are the same")
 	}
 
-	// TODO: error handling if database is DROP'd already... (not that it should be)
-	// restoreDatabase mysqldump into database
-	if err = dB.Restore(workingDir + latestDump); err != nil {
+	// restore database dump into database
+	fd, err := os.Open(workingDir+latestDump)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err := fd.Close(); err != nil {
+			glog.Error(err)
+		}
+	}()
+
+	dumpReader := bufio.NewReader(fd)
+	if err = dB.Restore(dumpReader); err != nil {
 		return "", err
 	}
 

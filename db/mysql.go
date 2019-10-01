@@ -7,10 +7,8 @@ import (
 	"database/sql"
 	"github.com/ctomkow/tto/util"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/golang/glog"
 	"io"
 	"net"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -115,28 +113,12 @@ func (db *Mysql) Dump() (*io.ReadCloser, error) {
 	return &stdout, nil
 }
 
-// TODO: refactor
-// read .sql statement by statement and fire off to database server
-// NOTE: bufio.NewScanner has a line length limit of 65536 chars. mysqldump does only one INSERT per table. Not good!
-//       Using ReadString with a ';' delimiter, ensuring that the next character after is '\n'
-func (db *Mysql) Restore(dump string) error {
-
-	fd, err := os.Open(dump)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := fd.Close(); err != nil {
-			glog.Error(err)
-		}
-	}()
-
-	reader := bufio.NewReader(fd)
-	var buffer strings.Builder
-
-	// send queries until EOF
+// Read database dump statement by statement and fire off to the database
+// Note: bufio.NewScanner has a line length limit of 65536 chars. db dump does only one INSERT per table
+// Using ReadString with a ';' delimiter, ensuring that the next character after is '\n'
+func (db *Mysql) Restore(reader *bufio.Reader) error {
+	var buf strings.Builder
 	for {
-
 		statement, err := reader.ReadString(';')
 		if err != nil {
 			if err == io.EOF {
@@ -144,25 +126,25 @@ func (db *Mysql) Restore(dump string) error {
 			}
 		}
 
-		buffer.WriteString(statement)
+		buf.WriteString(statement)
 
 		// look at next byte
-		oracleBytes, err := reader.Peek(1)
+		nextByte, err := reader.Peek(1)
 		if err != nil {
 			return err
 		}
 
-		if oracleBytes[0] == 10 { // newline '\n' aka utf decimal '10'
-			_, err = db.connection.Exec(buffer.String())
+		// newline '\n' aka utf decimal '10'
+		if nextByte[0] == 10 {
+			_, err = db.connection.Exec(buf.String())
 			if err != nil {
 				return err
 			}
-			buffer.Reset()
+			buf.Reset()
 		} else {
 			continue
 		}
 	}
-
 	return nil
 }
 
