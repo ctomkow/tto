@@ -27,6 +27,9 @@ type DB interface {
 	// return the implementation type
 	Impl() string
 
-	// return the filename of the dump
+	// return the name of the database
 	Name() string
+
+	// return the filename of the dump
+	DumpName() string
 }

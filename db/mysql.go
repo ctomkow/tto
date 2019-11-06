@@ -157,3 +157,8 @@ func (db *Mysql) Impl() string {
 func (db *Mysql) Name() string {
 	return db.name
 }
+
+// return dump filename
+func (db *Mysql) DumpName() string {
+	return db.filename
+}

@@ -79,7 +79,7 @@ func Sender(conf *conf.Config) error {
 	}
 	cronJob.Start()
 	startTicker(ticker, tickerChan)
-	// TODO: I am here in the reformatting/refactoring
+
 	for {
 		select {
 		// test ssh connection
@@ -110,12 +110,12 @@ func Sender(conf *conf.Config) error {
 				break
 			}
 
-			err = backup.ToRemote(remote, conf.System.WorkingDir, dB.Name(), dumpStdout, exe)
+			err = backup.ToRemote(remote, conf.System.WorkingDir, dB.DumpName(), dumpStdout, exe)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
-			expiredDump := buf.Enqueue(dB.Name())
+			expiredDump := buf.Enqueue(dB.DumpName())
 			if expiredDump == "" {
 				break
 			}
