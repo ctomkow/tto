@@ -49,7 +49,7 @@ func Receiver(conf *conf.Config) error {
 	}()
 	var lck = new(lock)
 	restoreChan := make(chan string)
-	ex := newExecHandler()
+	exe := newExecHandler()
 
 	// create working components
 	//   - open database connection
@@ -81,7 +81,7 @@ func Receiver(conf *conf.Config) error {
 			lck.restore = true
 
 			// run exec_before
-			output, err := ex.LocalCmd(conf.System.Role.Receiver.ExecBefore)
+			output, err := exe.LocalCmd(conf.System.Role.Receiver.ExecBefore)
 			if err != nil {
 				glog.Error(err)
 				lck.restore = false
@@ -110,7 +110,7 @@ func Receiver(conf *conf.Config) error {
 			}
 
 			// run exec_after
-			output, err := ex.LocalCmd(conf.System.Role.Receiver.ExecAfter)
+			output, err := exe.LocalCmd(conf.System.Role.Receiver.ExecAfter)
 			if err != nil {
 				glog.Error(err)
 			} else {
