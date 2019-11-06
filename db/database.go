@@ -5,6 +5,7 @@ package db
 
 import (
 	"bufio"
+	"github.com/ctomkow/tto/exec"
 	"io"
 )
 
@@ -19,7 +20,7 @@ type DB interface {
 	Drop() error
 
 	// dump the database with the command line utility
-	Dump() (*io.ReadCloser, error)
+	Dump(exe *exec.Exec) (*io.ReadCloser, error)
 
 	// restore the database using the database driver
 	Restore(reader *bufio.Reader) error

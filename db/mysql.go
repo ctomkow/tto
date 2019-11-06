@@ -5,11 +5,11 @@ package db
 import (
 	"bufio"
 	"database/sql"
+	"github.com/ctomkow/tto/exec"
 	"github.com/ctomkow/tto/util"
 	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"net"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -31,7 +31,7 @@ type Mysql struct {
 	maxConn int
 
 	// used for mysqldump
-	cmd      *exec.Cmd
+	cmd      *exec.Exec
 	filename string
 }
 
@@ -91,7 +91,7 @@ func (db *Mysql) Drop() error {
 }
 
 // dump the database and return the stdout stream
-func (db *Mysql) Dump() (*io.ReadCloser, error) {
+func (db *Mysql) Dump(exe *exec.Exec) (*io.ReadCloser, error) {
 	db.filename = db.name + "-" + util.NewTimestamp().Timestamp() + ".sql"
 
 	ipArg := "-h" + db.ip.String()
@@ -99,14 +99,14 @@ func (db *Mysql) Dump() (*io.ReadCloser, error) {
 	userArg := "-u" + db.user
 	passArg := "-p" + db.pass
 
-	db.cmd = exec.Command("mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name)
+	exe.LocalCmdOnly([]string{"mysqldump", "--single-transaction", "--skip-lock-tables", "--routines", "--triggers", ipArg, portArg, userArg, passArg, db.name})
 
-	stdout, err := db.cmd.StdoutPipe()
+	stdout, err := exe.Cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 
-	if err = db.cmd.Start(); err != nil {
+	if err = exe.Cmd.Start(); err != nil {
 		return nil, err
 	}
 

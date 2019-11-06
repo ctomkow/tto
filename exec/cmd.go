@@ -45,3 +45,8 @@ func (c *Exec) LocalCmd(command []string) (string, error) {
 
 	return out.String(), nil
 }
+
+// set pointer to the running command. Mainly used for streaming database dumps
+func (c *Exec) LocalCmdOnly(command []string) {
+	c.Cmd = exec.Command(command[0], command[1:]...)
+}

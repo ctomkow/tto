@@ -104,7 +104,7 @@ func Sender(conf *conf.Config) error {
 				break
 			}
 
-			dumpStdout, err := dB.Dump()
+			dumpStdout, err := dB.Dump(exe)
 			if err != nil {
 				glog.Error(err)
 				break
