@@ -2,6 +2,7 @@
     "System": {
         "user": "username",
         "pass": "password",
+        "ssh_key": "/home/user/.ssh/id_rsa",
         "working_dir": "/opt/tto/",
         "type": "sender|receiver",
         "Role": {

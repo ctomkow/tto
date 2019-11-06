@@ -46,6 +46,7 @@ func Sender(conf *conf.Config) error {
 		conf.System.Role.Sender.Port,
 		conf.System.User,
 		conf.System.Pass,
+		conf.System.SSHkey,
 	)
 	cronChan, cronJob := newCron(conf.System.Role.Sender.Cron)
 	tickerChan, ticker := newTicker(60)
@@ -172,9 +173,9 @@ func newRingBuf(size int) *CircularQueue {
 }
 
 // setup new ssh connection with remote host
-func newSSH(ip net.IPAddr, port uint16, user string, pass string) *inet.SSH {
+func newSSH(ip net.IPAddr, port uint16, user string, pass string, key string) *inet.SSH {
 	var remoteConn = new(inet.SSH)
-	remoteConn.Make(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass)
+	remoteConn.Make(ip.String(), strconv.FormatUint(uint64(port), 10), user, pass, key)
 	glog.Info("receiver host: " + ip.String())
 	return remoteConn
 }

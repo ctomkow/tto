@@ -14,6 +14,7 @@ type Config struct {
 	System struct {
 		User       string `json:"user"`
 		Pass       string `json:"pass"`
+		SSHkey	   string `json:"ssh_key"`
 		WorkingDir string `json:"working_dir"`
 		Type       string `json:"type"`
 		Role       struct {
@@ -47,6 +48,7 @@ func (conf *Config) MakeConfig() {
 
 	conf.System.User = `username`
 	conf.System.Pass = `password`
+	conf.System.SSHkey = `/home/user/.ssh/id_rsa`
 	conf.System.WorkingDir = `/opt/tto/`
 	conf.System.Type = `sender|receiver`
 	conf.System.Role.Sender.Dest = net.IPAddr{net.IPv4(6, 6, 6, 6), ""}

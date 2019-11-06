@@ -7,6 +7,8 @@ import (
 	"errors"
 	"github.com/golang/glog"
 	"golang.org/x/crypto/ssh"
+	//hk "golang.org/x/crypto/ssh/knownhosts"
+	"io/ioutil"
 	"strconv"
 	"time"
 )
@@ -16,23 +18,38 @@ type SSH struct {
 	remoteHostPort string
 	user           string
 	pass           string
+	key 		   string
 	config         *ssh.ClientConfig
 	Session        *ssh.Session
 	connection     *ssh.Client
 }
 
-// TODO: support for keys
-func (sh *SSH) Make(ip string, port string, user string, pass string) {
+func (sh *SSH) Make(ip string, port string, user string, pass string, key string) {
 
 	sh.remoteHostName = ip
 	sh.remoteHostPort = port
 	sh.user = user
 	sh.pass = pass
+	sh.key = key
+
+	keyContents, err := sh.readKey()
+	if err != nil {
+		glog.Fatal(err)
+	}
+	signer, err := ssh.ParsePrivateKeyWithPassphrase(keyContents, []byte(sh.pass))
+	if err != nil {
+		glog.Fatal(err)
+	}
+
+	//hostKeyCallback, err := hk.New("/home/"+sh.user+"/.ssh/known_hosts")
+	if err != nil {
+		glog.Fatal(err)
+	}
 
 	sh.config = &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(pass),
+			ssh.PublicKeys(signer),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -108,4 +125,14 @@ func (sh *SSH) Reconnect(tries int, delayInSec int) error {
 	}
 
 	return errors.New("reconnection with remote failed")
+}
+
+func (sh *SSH) readKey() ([]byte, error) {
+
+	content, err := ioutil.ReadFile(sh.key)
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
 }
