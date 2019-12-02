@@ -92,7 +92,7 @@ func (db *Mysql) Drop() error {
 
 // dump the database and return the stdout stream
 func (db *Mysql) Dump(exe *exec.Exec) (*io.ReadCloser, error) {
-	db.filename = db.name + "-" + util.NewTimestamp().Timestamp() + ".sql"
+	db.filename = db.name + "_-_" + util.NewTimestamp().Timestamp() + ".sql"
 
 	ipArg := "-h" + db.ip.String()
 	portArg := "-P" + strconv.FormatUint(uint64(db.port), 10)

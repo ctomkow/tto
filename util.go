@@ -28,8 +28,8 @@ func sortBackups(filenames []string) []string {
 	var timestamps []time.Time
 
 	for _, filename := range filenames {
-		// grab before and after dash
-		splitStrings, err := splitOnDelimiter("-", filename)
+		// grab before and after character sequence
+		splitStrings, err := splitOnDelimiter("_-_", filename)
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -67,7 +67,7 @@ func sortBackups(filenames []string) []string {
 // compileBackupFilename returns a string of the full database backup filename
 func compileBackupFilename(dbName string, timestamp time.Time) string {
 
-	compiledString := dbName + "-" + timestamp.Format("20060102150405") + ".sql"
+	compiledString := dbName + "_-_" + timestamp.Format("20060102150405") + ".sql"
 	return compiledString
 }
 
