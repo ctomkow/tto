@@ -59,7 +59,7 @@ func Restore(dB db.DB, workingDir string) (string, error) {
 	}
 
 	// ## safety check: latest dump vs configuration database name
-	if strings.Compare(strings.Split(latestDump, "-")[0], dB.Name()) != 0 {
+	if strings.Compare(strings.Split(latestDump, "_-_")[0], dB.Name()) != 0 {
 		// oh shit, someone is dumping one database but trying to restoreDatabase it into another one
 		return "", errors.New("the dumped database does not match the one configured in the conf file")
 	}
