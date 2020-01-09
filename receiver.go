@@ -12,6 +12,7 @@ import (
 	"github.com/golang/glog"
 	"net"
 	"os"
+	"time"
 )
 
 type lock struct {
@@ -56,10 +57,11 @@ func Receiver(conf *conf.Config) error {
 	//   - watch file for changes
 	//   - file change event variable
 
-	// TODO: try 3 times in failure
-	if err := dB.Open(); err != nil {
+	// useful for when the tto server boots up faster than the database server
+	if err := attemptDB(dB, 3, 10); err != nil {
 		return err
 	}
+
 	// FYI, VIM doesn't create a WRITE event, only RENAME, CHMOD, REMOVE (then breaks future watching). https://github.com/fsnotify/fsnotify/issues/94#issuecomment-287456396
 	if err = watcher.Add(conf.System.WorkingDir + ".latest.dump"); err != nil {
 		return err
@@ -164,4 +166,15 @@ func newReceiverDb(impl string, ip net.IPAddr, port uint16, user string, pass st
 		return nil
 	}
 	return nil
+}
+
+func attemptDB(dB db.DB, tries int, delayInSec int) error {
+	var err error
+	for i := 1; i <= tries; i++ {
+		if err = dB.Open(); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(delayInSec) * time.Second)
+	}
+	return err
 }
