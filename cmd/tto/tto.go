@@ -5,7 +5,7 @@ package main
 
 import (
 	"errors"
-	"github.com/ctomkow/tto/conf"
+	"github.com/ctomkow/tto/cmd/tto/conf"
 	"github.com/golang/glog"
 	"github.com/takama/daemon"
 )

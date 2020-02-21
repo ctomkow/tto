@@ -6,7 +6,7 @@ package backup
 import (
 	"bufio"
 	"errors"
-	"github.com/ctomkow/tto/db"
+	"github.com/ctomkow/tto/cmd/tto/db"
 	"github.com/golang/glog"
 	"io/ioutil"
 	"os"

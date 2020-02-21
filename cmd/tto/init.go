@@ -5,7 +5,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/ctomkow/tto/conf"
+	"github.com/ctomkow/tto/cmd/tto/conf"
 	"github.com/golang/glog"
 	"os"
 	"os/user"

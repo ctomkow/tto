@@ -5,11 +5,11 @@ package main
 
 import (
 	"errors"
-	"github.com/ctomkow/tto/backup"
-	"github.com/ctomkow/tto/conf"
-	"github.com/ctomkow/tto/db"
-	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/inet"
+	"github.com/ctomkow/tto/cmd/tto/backup"
+	"github.com/ctomkow/tto/cmd/tto/conf"
+	"github.com/ctomkow/tto/cmd/tto/db"
+	"github.com/ctomkow/tto/cmd/tto/exec"
+	"github.com/ctomkow/tto/cmd/tto/inet"
 	"github.com/golang/glog"
 	"github.com/robfig/cron"
 	"net"

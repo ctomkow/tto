@@ -4,9 +4,9 @@
 package backup
 
 import (
-	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/inet"
-	"github.com/ctomkow/tto/netio"
+	"github.com/ctomkow/tto/cmd/tto/exec"
+	"github.com/ctomkow/tto/cmd/tto/inet"
+	"github.com/ctomkow/tto/cmd/tto/netio"
 	"github.com/golang/glog"
 	"io"
 )

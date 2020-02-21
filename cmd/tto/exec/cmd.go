@@ -5,7 +5,7 @@ package exec
 
 import (
 	"bytes"
-	"github.com/ctomkow/tto/inet"
+	"github.com/ctomkow/tto/cmd/tto/inet"
 	"os/exec"
 )
 

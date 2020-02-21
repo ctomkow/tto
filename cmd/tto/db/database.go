@@ -5,7 +5,7 @@ package db
 
 import (
 	"bufio"
-	"github.com/ctomkow/tto/exec"
+	"github.com/ctomkow/tto/cmd/tto/exec"
 	"io"
 )
 

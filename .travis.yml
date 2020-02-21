@@ -13,7 +13,7 @@ git:
   
 # build containerized app
 before_install:
-  - docker build --build-arg GID=1000 --build-arg UID=1000 --build-arg NAME=tto -t tto .
+  - docker build --build-arg GID=1000 --build-arg UID=1000 --build-arg NAME=tto -t tto ./build/docker
 
 # build non-containerized app
 install:

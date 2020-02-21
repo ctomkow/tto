@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y \
 # app user
 RUN groupadd -g ${GID} ${NAME} && useradd -s /bin/bash -u ${UID} -g ${GID} ${NAME}
 
-RUN mkdir -p /go/src/github.com/ctomkow/tto
-WORKDIR /go/src/github.com/ctomkow/tto
+RUN mkdir -p /go/src/github.com/ctomkow/tto/cmd/tto
+WORKDIR /go/src/github.com/ctomkow/tto/cmd/tto
 
 RUN go get "github.com/takama/daemon"       && \
     go get "github.com/golang/glog"         && \
@@ -25,7 +25,7 @@ RUN go get "github.com/takama/daemon"       && \
     go get "golang.org/x/crypto/ssh"
 
 # compile
-COPY . /go/src/github.com/ctomkow/tto
+COPY ../../cmd/tto/ ./
 RUN go install
 
 # install app

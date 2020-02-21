@@ -5,8 +5,8 @@ package db
 import (
 	"bufio"
 	"database/sql"
-	"github.com/ctomkow/tto/exec"
-	"github.com/ctomkow/tto/util"
+	"github.com/ctomkow/tto/cmd/tto/exec"
+	"github.com/ctomkow/tto/cmd/tto/util"
 	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"net"
