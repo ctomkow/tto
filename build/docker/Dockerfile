@@ -25,7 +25,8 @@ RUN go get "github.com/takama/daemon"       && \
     go get "golang.org/x/crypto/ssh"
 
 # compile
-COPY ../../cmd/tto/ ./
+COPY ./ /go/src/github.com/ctomkow/tto/cmd/tto/
+
 RUN go install
 
 # install app
