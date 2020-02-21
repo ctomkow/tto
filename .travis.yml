@@ -25,5 +25,5 @@ install:
   - go get "golang.org/x/crypto/ssh"
   
 script:
-  - go test ./...
-  - go install
+  - go test ./cmd/tto/...
+  - go install ./cmd/tto
