@@ -73,9 +73,19 @@ Currently, the docker install doesn't create a sample conf.json at runtime. See 
     docker-compose up -d
 
 ## Manual Build & Install
-(`go get` all build dependencies)
+    Ensure you build on the target system!
 
-    go build tto.go
+    mkdir -p build/bin/tto-0.5.2
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o ./build/bin/tto-0.5.2/tto ./cmd/tto
+    tar -czf build/package/rpmbuild/SOURCES/tto-0.5.2.tar.gz -C build/bin tto-0.5.2
+
+### RPM build
+
+    Edit tto.spec versioning to match
+
+    rpmbuild -ba build/package/rpmbuild/SPECS/tto.spec --define "_topdir $(pwd)/build/package/rpmbuild"
+
+### Install on system
 
     ./tto install
 
@@ -83,7 +93,7 @@ Currently, the docker install doesn't create a sample conf.json at runtime. See 
 
     systemctl start tto
 
-## Manual Uninstall
+### Manual Uninstall
 
     ./tto remove
     rm -r /opt/tto/

@@ -1,5 +1,5 @@
 Name:		tto		
-Version:	0.5.1	
+Version:	0.5.2
 Release:	1%{?dist}
 Summary:	tto package	
 
@@ -7,7 +7,7 @@ Group:		System Environment/Base
 Packager:	Craig Tomkow
 License:	MIT	
 URL:		https://github.com/ctomkow/tto	
-Source0:	tto-0.5.1.tar.gz
+Source0:	tto-0.5.2.tar.gz
 
 Requires:	mariadb
 
@@ -32,15 +32,22 @@ cp -rfa * %{buildroot}/usr/local/bin/
 %attr(0744, root, root) /usr/local/bin/*
 
 %post
-/usr/local/bin/tto install
+# Only run on fresh install, not upgrade
+if [ "$1" -eq 1 ]; then
+    /usr/local/bin/tto install || true
+fi
 
 %preun
-/usr/local/bin/tto remove
+# Only run on full removal, not upgrade
+if [ "$1" -eq 0 ]; then
+    /usr/local/bin/tto remove || true
+fi
 
 %postun
-rm -r /opt/tto/
-rm -r /etc/tto/
-exit
+# Do NOT delete config or opt directory on upgrade
+if [ "$1" -eq 0 ]; then
+    rm -rf /opt/tto/ /etc/tto/
+fi
 
 %doc
 %changelog

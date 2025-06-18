@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// daemon setup and service start
-	srv, err := daemon.New(name, description)
+	srv, err := daemon.New(name, description, daemon.SystemDaemon)
 	if err != nil {
 		glog.Fatal(err)
 	}

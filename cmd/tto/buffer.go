@@ -8,8 +8,8 @@ type CircularQueue struct {
 	size int
 
 	// circular queue is an array of structs queue{dbName string, timestamp time.Time}
-	// it has an artificial buffer limit size of 31, regardless of user specified max_backups
-	queue [31]struct {
+	// it has an artificial buffer limit size of 100, capping user specified max_backups
+	queue [100]struct {
 		name string
 	}
 
