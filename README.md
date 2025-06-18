@@ -32,13 +32,14 @@ deployment where replication was not possible.
 The application needs to be installed on the primary and secondary systems. Each will be configured for their 
 respective roles (sender | receiver).
 
-## RPM Install
+## RPM Install/Upgrade
 
-    sudo yum install tto-<version>.x86_64.rpm
+    sudo yum install ./tto-<version>.x86_64.rpm
 
 (edit /etc/tto/conf.json)
 
-    sudo systemctl start tto   
+    sudo systemctl enable tto
+    sudo systemctl start tto
 
 ## RPM Uninstall
     sudo yum remove tto
@@ -49,9 +50,7 @@ WARNING: this removes working dir /opt/tto and conf dir /etc/tto as well!
 Currently, the docker install doesn't create a sample conf.json at runtime. See the sample conf.json included in the repo.
 
     mkdir /etc/tto
-
     mkdir /opt/tto
-
     cp conf.json /etc/tto/
 
 (edit /etc/tto/conf.json)
@@ -72,7 +71,7 @@ Currently, the docker install doesn't create a sample conf.json at runtime. See 
 
     docker-compose up -d
 
-## Manual Build & Install
+## Build
     Ensure you build on the target system!
 
     mkdir -p build/bin/tto-0.5.2
@@ -84,17 +83,3 @@ Currently, the docker install doesn't create a sample conf.json at runtime. See 
     Edit tto.spec versioning to match
 
     rpmbuild -ba build/package/rpmbuild/SPECS/tto.spec --define "_topdir $(pwd)/build/package/rpmbuild"
-
-### Install on system
-
-    ./tto install
-
-(edit /etc/tto/conf.json)
-
-    systemctl start tto
-
-### Manual Uninstall
-
-    ./tto remove
-    rm -r /opt/tto/
-    rm -r /etc/tto/
