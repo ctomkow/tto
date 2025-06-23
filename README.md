@@ -75,6 +75,8 @@ Currently, the docker install doesn't create a sample conf.json at runtime. See 
     Ensure you build on the target system!
 
     mkdir -p build/bin/tto-0.5.2
+
+    # CGO is required for looking up an AD user to work
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o ./build/bin/tto-0.5.2/tto ./cmd/tto
     tar -czf build/package/rpmbuild/SOURCES/tto-0.5.2.tar.gz -C build/bin tto-0.5.2
 

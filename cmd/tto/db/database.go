@@ -20,7 +20,7 @@ type DB interface {
 	Drop() error
 
 	// dump the database with the command line utility
-	Dump(exe *exec.Exec) (*io.ReadCloser, error)
+	Dump(exe *exec.Exec) (*io.ReadCloser, *io.ReadCloser, error)
 
 	// restore the database using the database driver
 	Restore(reader *bufio.Reader) error

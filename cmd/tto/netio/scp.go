@@ -6,6 +6,7 @@
 package netio
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -18,7 +19,7 @@ import (
 	"time"
 )
 
-func StreamMySqlDump(byteBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *inet.SSH) error {
+func StreamMySqlDump(byteBuffer *io.ReadCloser, errBuffer *io.ReadCloser, filename string, workingDir string, permissions string, ex *exec.Exec, sh *inet.SSH) error {
 
 	// ensure a new session is created before acting!
 	if err := sh.NewSession(); err != nil {
@@ -49,22 +50,22 @@ func StreamMySqlDump(byteBuffer *io.ReadCloser, filename string, workingDir stri
 	flush := bytes.NewReader(buf)
 
 	// since i don't know the size of the dump, set a static max to 100GB (107374182400 bytes)
-	if err := stream(*byteBuffer, workingDir+filename, permissions, 107374182400, ex, sh, flush); err != nil {
+	if err := stream(*byteBuffer, *errBuffer, workingDir+filename, permissions, 107374182400, ex, sh, flush); err != nil {
 		glog.Error(err)
 	}
 
 	return nil
 }
 
-func stream(r io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *inet.SSH, flush io.Reader) error {
+func stream(r io.ReadCloser, rErr io.ReadCloser, absolutePath string, permissions string, size int64, ex *exec.Exec, sh *inet.SSH, flush io.Reader) error {
 
 	filename := path.Base(absolutePath)
 	directory := path.Dir(absolutePath)
 
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(3)
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 
 	go func() {
 		defer wg.Done()
@@ -97,6 +98,18 @@ func stream(r io.ReadCloser, absolutePath string, permissions string, size int64
 		if err != nil {
 			errCh <- err
 			return
+		}
+	}()
+
+	// a goroutine for the receive-side (sql dump) stderr stream. I want to log this to catch any issues with the receive-stream.
+	go func() {
+		defer wg.Done()
+		s := bufio.NewScanner(rErr)
+		for s.Scan() {
+			glog.Error("sqldump: %s", s.Text())
+		}
+		if err := s.Err(); err != nil {
+			errCh <- err
 		}
 	}()
 

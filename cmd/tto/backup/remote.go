@@ -12,13 +12,13 @@ import (
 )
 
 // add lock file, copy dump over, remove lock, add lock for .latest.dump, update .latest.dump, remove lock
-func ToRemote(sh *inet.SSH, workingDir string, dumpName string, stdout *io.ReadCloser, ex *exec.Exec) error {
+func ToRemote(sh *inet.SSH, workingDir string, dumpName string, stdout *io.ReadCloser, stderr *io.ReadCloser, ex *exec.Exec) error {
 
 	_, err := ex.RemoteCmd(sh, "touch "+workingDir+"~"+dumpName+".lock")
 	if err != nil {
 		return err
 	}
-	if err = netio.StreamMySqlDump(stdout, dumpName, workingDir, "0600", ex, sh); err != nil {
+	if err = netio.StreamMySqlDump(stdout, stderr, dumpName, workingDir, "0600", ex, sh); err != nil {
 		return err
 	}
 	_, err = ex.RemoteCmd(sh, "rm "+workingDir+"~"+dumpName+".lock")

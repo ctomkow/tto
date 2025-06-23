@@ -91,7 +91,7 @@ func (db *Mysql) Drop() error {
 }
 
 // dump the database and return the stdout stream
-func (db *Mysql) Dump(exe *exec.Exec) (*io.ReadCloser, error) {
+func (db *Mysql) Dump(exe *exec.Exec) (*io.ReadCloser, *io.ReadCloser, error) {
 	db.filename = db.name + "_-_" + util.NewTimestamp().Timestamp() + ".sql"
 
 	ipArg := "-h" + db.ip.String()
@@ -103,14 +103,19 @@ func (db *Mysql) Dump(exe *exec.Exec) (*io.ReadCloser, error) {
 
 	stdout, err := exe.Cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	stderr, err := exe.Cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if err = exe.Cmd.Start(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &stdout, nil
+	return &stdout, &stderr, nil
 }
 
 // Read database dump statement by statement and fire off to the database
